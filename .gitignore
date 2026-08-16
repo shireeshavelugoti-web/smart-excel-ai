@@ -1,0 +1,24 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environments & Virtual Envs
+venv/
+env/
+.venv/
+.env
+
+# Temporary upload and export directories
+temp_uploads/
+temp_outputs/
+operation_history.json
+
+# Pytest / IDE caches
+.pytest_cache/
+.vscode/
+.idea/
+
+# OS generated files
+.DS_Store
+Thumbs.db

@@ -1,0 +1,695 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Excel AI | Intelligent Excel Automation Assistant</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- FontAwesome & Lucide Icons CDN -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- SheetJS CDN for standalone browser Excel parsing -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <!-- Chart.js CDN for modern data visualization -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="dark-theme">
+    <div class="app-layout">
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-brand">
+                <div class="brand-logo">
+                    <i class="fa-solid fa-file-excel"></i>
+                </div>
+                <div class="brand-text">
+                    <h2>Smart Excel <span>AI</span></h2>
+                    <p>Automation Assistant</p>
+                </div>
+            </div>
+
+            <nav class="sidebar-menu">
+                <button class="nav-item active" data-tab="dashboard">
+                    <i class="fa-solid fa-chart-line"></i> <span>Dashboard</span>
+                </button>
+                <button class="nav-item" data-tab="updater">
+                    <i class="fa-solid fa-wand-magic-sparkles"></i> <span>Excel Updater</span>
+                </button>
+                <button class="nav-item" data-tab="cleaner">
+                    <i class="fa-solid fa-broom"></i> <span>Data Cleaner</span>
+                </button>
+                <button class="nav-item" data-tab="analyzer">
+                    <i class="fa-solid fa-brain"></i> <span>ML Analyzer</span>
+                </button>
+                <button class="nav-item" data-tab="prediction">
+                    <i class="fa-solid fa-bullseye"></i> <span>Prediction</span>
+                </button>
+                <button class="nav-item" data-tab="history">
+                    <i class="fa-solid fa-clock-rotate-left"></i> <span>History</span>
+                </button>
+                <button class="nav-item" data-tab="about">
+                    <i class="fa-solid fa-circle-info"></i> <span>About</span>
+                </button>
+            </nav>
+
+            <div class="sidebar-footer">
+                <div class="api-mode-toggle">
+                    <div class="status-indicator" id="status-dot"></div>
+                    <span id="api-status-text">Client-Side Demo Mode</span>
+                </div>
+                <button class="btn-api-switch" id="btn-toggle-api" title="Switch between Browser Demo and Python FastAPI backend">
+                    <i class="fa-solid fa-plug"></i> <span id="api-btn-label">Connect Backend</span>
+                </button>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <!-- Header Bar -->
+            <header class="top-header">
+                <div class="header-title">
+                    <h1 id="page-title">Dashboard</h1>
+                    <p id="page-subtitle">Intelligent Excel Automation powered by Machine Learning</p>
+                </div>
+                <div class="header-actions">
+                    <span class="badge badge-student"><i class="fa-solid fa-graduation-cap"></i> B.Tech Capstone AI Project</span>
+                </div>
+            </header>
+
+            <!-- Container for Tab Sections -->
+            <div class="content-container">
+
+                <!-- 1. DASHBOARD TAB -->
+                <section class="tab-page active" id="tab-dashboard">
+                    <div class="welcome-banner">
+                        <div class="banner-text">
+                            <h2>Automate your Excel work with AI.</h2>
+                            <p>Upload spreadsheets, use natural language to find and replace values, detect anomaly rows with Isolation Forest ML, and build predictive regression/classification models automatically.</p>
+                        </div>
+                        <div class="banner-badge">
+                            <i class="fa-solid fa-sparkles"></i> NLP + ML Powered
+                        </div>
+                    </div>
+
+                    <!-- Metrics Grid -->
+                    <div class="metrics-grid">
+                        <div class="metric-card glass-card">
+                            <div class="metric-icon blue"><i class="fa-solid fa-file-csv"></i></div>
+                            <div class="metric-data">
+                                <h3 id="stat-files">14</h3>
+                                <p>Excel Files Processed</p>
+                            </div>
+                        </div>
+                        <div class="metric-card glass-card">
+                            <div class="metric-icon purple"><i class="fa-solid fa-pen-to-square"></i></div>
+                            <div class="metric-data">
+                                <h3 id="stat-updates">28</h3>
+                                <p>Updates Completed</p>
+                            </div>
+                        </div>
+                        <div class="metric-card glass-card">
+                            <div class="metric-icon amber"><i class="fa-solid fa-triangle-exclamation"></i></div>
+                            <div class="metric-data">
+                                <h3 id="stat-issues">42</h3>
+                                <p>Data Issues Detected</p>
+                            </div>
+                        </div>
+                        <div class="metric-card glass-card">
+                            <div class="metric-icon emerald"><i class="fa-solid fa-robot"></i></div>
+                            <div class="metric-data">
+                                <h3 id="stat-predictions">19</h3>
+                                <p>ML Predictions</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Module Shortcut Cards -->
+                    <div class="modules-overview">
+                        <h3>Core System Modules</h3>
+                        <div class="module-cards-grid">
+                            <div class="module-card glass-card" onclick="switchTab('updater')">
+                                <div class="card-header">
+                                    <i class="fa-solid fa-wand-magic-sparkles text-indigo"></i>
+                                    <span class="module-num">MODULE 1</span>
+                                </div>
+                                <h4>AI Excel Navigator & Updater</h4>
+                                <p>Natural language parsing, fuzzy column matching, intent classification, and non-destructive cell updates with previews.</p>
+                                <button class="btn-link">Open Updater <i class="fa-solid fa-arrow-right"></i></button>
+                            </div>
+
+                            <div class="module-card glass-card" onclick="switchTab('cleaner')">
+                                <div class="card-header">
+                                    <i class="fa-solid fa-broom text-amber"></i>
+                                    <span class="module-num">MODULE 2</span>
+                                </div>
+                                <h4>Intelligent Data Cleaner</h4>
+                                <p>Missing value imputation, duplicate removal, casing/spacing normalization, and Isolation Forest ML outlier detection.</p>
+                                <button class="btn-link">Open Cleaner <i class="fa-solid fa-arrow-right"></i></button>
+                            </div>
+
+                            <div class="module-card glass-card" onclick="switchTab('analyzer')">
+                                <div class="card-header">
+                                    <i class="fa-solid fa-brain text-emerald"></i>
+                                    <span class="module-num">MODULE 3</span>
+                                </div>
+                                <h4>ML Analyzer & Predictor</h4>
+                                <p>Auto feature profiling, correlation heatmaps, Random Forest / Regression / Logistic models, evaluation metrics & inference.</p>
+                                <button class="btn-link">Open ML Engine <i class="fa-solid fa-arrow-right"></i></button>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 2. EXCEL UPDATER TAB -->
+                <section class="tab-page" id="tab-updater">
+                    <div class="grid-layout-2col">
+                        <!-- Left Panel: Upload & Instruction -->
+                        <div class="card glass-card">
+                            <div class="card-title">
+                                <i class="fa-solid fa-cloud-arrow-up"></i>
+                                <h3>Upload & Natural Language Query</h3>
+                            </div>
+                            
+                            <!-- File Drag & Drop -->
+                            <div class="upload-zone" id="updater-upload-zone">
+                                <i class="fa-solid fa-file-excel upload-icon"></i>
+                                <h4>Drag & Drop Excel File here</h4>
+                                <p>Supports .xlsx, .xls, .csv files</p>
+                                <input type="file" id="updater-file-input" accept=".xlsx, .xls, .csv" hidden>
+                                <button class="btn btn-secondary" onclick="document.getElementById('updater-file-input').click()">Browse File</button>
+                            </div>
+
+                            <div class="file-status-bar hidden" id="updater-file-info">
+                                <div class="file-meta">
+                                    <i class="fa-solid fa-file-lines"></i>
+                                    <div>
+                                        <h5 id="updater-filename">Students.xlsx</h5>
+                                        <span id="updater-filesize">Loaded sample dataset</span>
+                                    </div>
+                                </div>
+                                <select id="updater-sheet-select" class="select-control">
+                                    <option value="Students">Sheet: Students</option>
+                                </select>
+                            </div>
+
+                            <!-- Sample Prompts -->
+                            <div class="sample-prompts">
+                                <span>Sample Instructions:</span>
+                                <button class="btn-chip" onclick="setUpdaterPrompt('Change the department of student 1025 to Artificial Intelligence.')">Student 1025 -> AI</button>
+                                <button class="btn-chip" onclick="setUpdaterPrompt('Update the salary of employee E104 to 55000.')">Salary E104 -> 55000</button>
+                                <button class="btn-chip" onclick="setUpdaterPrompt('Change the phone number of Ravi to 9876543210.')">Phone Ravi -> 9876543210</button>
+                            </div>
+
+                            <!-- Instruction Input -->
+                            <div class="form-group">
+                                <label for="nl-instruction-input">Natural Language Instruction</label>
+                                <textarea id="nl-instruction-input" rows="3" class="input-control" placeholder="e.g. Change the department of student 1025 to Artificial Intelligence."></textarea>
+                            </div>
+
+                            <button class="btn btn-primary btn-block" id="btn-analyze-instruction" onclick="analyzeInstruction()">
+                                <i class="fa-solid fa-wand-magic-sparkles"></i> Analyze Instruction
+                            </button>
+                        </div>
+
+                        <!-- Right Panel: NLP Analysis & Diff Preview -->
+                        <div class="card glass-card">
+                            <div class="card-title">
+                                <i class="fa-solid fa-eye"></i>
+                                <h3>Detected Intent & Modification Preview</h3>
+                            </div>
+
+                            <div class="nlp-results-placeholder" id="nlp-placeholder">
+                                <i class="fa-solid fa-compass-drafting placeholder-icon"></i>
+                                <p>Upload a file and click <strong>Analyze Instruction</strong> to generate a preview of cell modifications.</p>
+                            </div>
+
+                            <div class="nlp-results-content hidden" id="nlp-content">
+                                <div class="intent-badge-container">
+                                    <span class="badge badge-intent" id="detected-intent-badge">UPDATE</span>
+                                    <span class="confidence-tag">Confidence Score: <strong id="confidence-score">94%</strong></span>
+                                </div>
+
+                                <div class="diff-grid">
+                                    <div class="diff-item">
+                                        <span class="diff-label">Target Sheet:</span>
+                                        <span class="diff-val" id="res-target-sheet">Students</span>
+                                    </div>
+                                    <div class="diff-item">
+                                        <span class="diff-label">Target Column:</span>
+                                        <span class="diff-val highlight" id="res-target-col">Department</span>
+                                    </div>
+                                    <div class="diff-item">
+                                        <span class="diff-label">Target Record:</span>
+                                        <span class="diff-val" id="res-target-record">Student ID = 1025</span>
+                                    </div>
+                                    <div class="diff-item">
+                                        <span class="diff-label">Target Row #:</span>
+                                        <span class="diff-val" id="res-target-row">5</span>
+                                    </div>
+                                </div>
+
+                                <!-- Value Comparison Box -->
+                                <div class="value-comparison-box">
+                                    <div class="val-box old-val">
+                                        <span>Current Value</span>
+                                        <strong id="res-old-val">CSE</strong>
+                                    </div>
+                                    <div class="val-arrow"><i class="fa-solid fa-arrow-right"></i></div>
+                                    <div class="val-box new-val">
+                                        <span>New Value</span>
+                                        <strong id="res-new-val">Artificial Intelligence</strong>
+                                    </div>
+                                </div>
+
+                                <div class="action-btn-row">
+                                    <button class="btn btn-secondary" onclick="previewDiffModal()"><i class="fa-solid fa-magnifying-glass"></i> Preview Row Diff</button>
+                                    <button class="btn btn-success" id="btn-confirm-update" onclick="confirmUpdate()"><i class="fa-solid fa-check"></i> Confirm Update</button>
+                                </div>
+
+                                <div class="update-complete-banner hidden" id="update-success-banner">
+                                    <div class="banner-success-text">
+                                        <i class="fa-solid fa-circle-check"></i>
+                                        <span>Update completed successfully. Original file preserved.</span>
+                                    </div>
+                                    <a id="download-updated-btn" class="btn btn-emerald" href="#" download="Students_updated.xlsx">
+                                        <i class="fa-solid fa-download"></i> Download Updated Excel
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Dataset Preview Table -->
+                    <div class="card glass-card margin-top">
+                        <div class="card-title space-between">
+                            <h3><i class="fa-solid fa-table"></i> Dataset Sample Table</h3>
+                            <span class="record-count-badge" id="table-record-count">10 Records</span>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="data-table" id="updater-data-table">
+                                <thead>
+                                    <!-- Dynamic headers -->
+                                </thead>
+                                <tbody>
+                                    <!-- Dynamic rows -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 3. DATA CLEANER TAB -->
+                <section class="tab-page" id="tab-cleaner">
+                    <div class="grid-layout-3col">
+                        <!-- File Upload Panel -->
+                        <div class="card glass-card">
+                            <div class="card-title">
+                                <i class="fa-solid fa-file-shield"></i>
+                                <h3>Select Dataset</h3>
+                            </div>
+                            <div class="upload-zone compact" onclick="document.getElementById('cleaner-file-input').click()">
+                                <i class="fa-solid fa-upload"></i>
+                                <p>Click or Drag to Upload Dataset</p>
+                                <input type="file" id="cleaner-file-input" accept=".xlsx, .xls, .csv" hidden>
+                            </div>
+                            <div class="form-group margin-top-sm">
+                                <label>Target Sheet</label>
+                                <select id="cleaner-sheet-select" class="select-control">
+                                    <option value="Sheet1">Students.xlsx (Students)</option>
+                                </select>
+                            </div>
+                            <button class="btn btn-primary btn-block" onclick="runDataAudit()">
+                                <i class="fa-solid fa-magnifying-glass-chart"></i> Detect Data Issues
+                            </button>
+                        </div>
+
+                        <!-- Data Quality Overview Stats -->
+                        <div class="card glass-card col-span-2">
+                            <div class="card-title">
+                                <i class="fa-solid fa-heart-pulse"></i>
+                                <h3>Data Quality Overview</h3>
+                            </div>
+                            <div class="stats-mini-grid">
+                                <div class="mini-stat">
+                                    <span class="mini-label">Total Rows</span>
+                                    <h4 id="cleaner-stat-rows">100</h4>
+                                </div>
+                                <div class="mini-stat">
+                                    <span class="mini-label">Columns</span>
+                                    <h4 id="cleaner-stat-cols">6</h4>
+                                </div>
+                                <div class="mini-stat text-amber">
+                                    <span class="mini-label">Missing Values</span>
+                                    <h4 id="cleaner-stat-missing">12</h4>
+                                </div>
+                                <div class="mini-stat text-purple">
+                                    <span class="mini-label">Duplicates</span>
+                                    <h4 id="cleaner-stat-duplicates">5</h4>
+                                </div>
+                                <div class="mini-stat text-rose">
+                                    <span class="mini-label">ML Outliers</span>
+                                    <h4 id="cleaner-stat-outliers">7</h4>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Detected Issues Table & Cleaning Controls -->
+                    <div class="grid-layout-2col margin-top">
+                        <div class="card glass-card">
+                            <div class="card-title">
+                                <i class="fa-solid fa-list-check"></i>
+                                <h3>Detected Quality Issues</h3>
+                            </div>
+                            <table class="issues-table" id="issues-table">
+                                <thead>
+                                    <tr>
+                                        <th>Issue Category</th>
+                                        <th>Count</th>
+                                        <th>Details</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td><span class="badge badge-amber">Missing Values</span></td>
+                                        <td>12</td>
+                                        <td>Null cells found in GPA and Email</td>
+                                    </tr>
+                                    <tr>
+                                        <td><span class="badge badge-purple">Duplicates</span></td>
+                                        <td>5</td>
+                                        <td>Identical student row matches</td>
+                                    </tr>
+                                    <tr>
+                                        <td><span class="badge badge-rose">Isolation Forest Outliers</span></td>
+                                        <td>7</td>
+                                        <td>Extreme GPA and salary values flagged by ML</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- Cleaning Configuration Card -->
+                        <div class="card glass-card">
+                            <div class="card-title">
+                                <i class="fa-solid fa-sliders"></i>
+                                <h3>Cleaning Options</h3>
+                            </div>
+                            <div class="checkbox-group">
+                                <label class="checkbox-item">
+                                    <input type="checkbox" id="opt-missing" checked>
+                                    <span>Impute missing values (Median / Mode)</span>
+                                </label>
+                                <label class="checkbox-item">
+                                    <input type="checkbox" id="opt-duplicates" checked>
+                                    <span>Deduplicate identical rows</span>
+                                </label>
+                                <label class="checkbox-item">
+                                    <input type="checkbox" id="opt-spaces" checked>
+                                    <span>Trim extra spaces & whitespace</span>
+                                </label>
+                                <label class="checkbox-item">
+                                    <input type="checkbox" id="opt-casing" checked>
+                                    <span>Standardize capitalization (Title / Upper)</span>
+                                </label>
+                                <label class="checkbox-item">
+                                    <input type="checkbox" id="opt-outliers">
+                                    <span>Remove Isolation Forest outliers</span>
+                                </label>
+                            </div>
+
+                            <div class="action-btn-row margin-top">
+                                <button class="btn btn-secondary" onclick="previewCleaning()"><i class="fa-solid fa-eye"></i> Preview Cleaning</button>
+                                <button class="btn btn-success" onclick="applyCleaning()"><i class="fa-solid fa-check-double"></i> Apply Cleaning</button>
+                            </div>
+
+                            <div class="cleaned-download-banner hidden" id="cleaner-download-banner">
+                                <p><i class="fa-solid fa-circle-check text-emerald"></i> Dataset cleaned successfully!</p>
+                                <a class="btn btn-emerald" id="btn-download-cleaned" href="#">
+                                    <i class="fa-solid fa-download"></i> Download Cleaned File
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 4. ML ANALYZER TAB -->
+                <section class="tab-page" id="tab-analyzer">
+                    <div class="grid-layout-2col">
+                        <!-- Overview Card -->
+                        <div class="card glass-card">
+                            <div class="card-title">
+                                <i class="fa-solid fa-chart-pie"></i>
+                                <h3>Dataset ML Overview</h3>
+                            </div>
+                            <div class="ml-stats-row">
+                                <div class="stat-box">
+                                    <span id="ml-stat-rows">302</span>
+                                    <p>Rows</p>
+                                </div>
+                                <div class="stat-box">
+                                    <span id="ml-stat-cols">7</span>
+                                    <p>Columns</p>
+                                </div>
+                                <div class="stat-box">
+                                    <span id="ml-stat-num">6</span>
+                                    <p>Numerical Features</p>
+                                </div>
+                                <div class="stat-box">
+                                    <span id="ml-stat-cat">1</span>
+                                    <p>Categorical Features</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Model Configuration Card -->
+                        <div class="card glass-card">
+                            <div class="card-title">
+                                <i class="fa-solid fa-gears"></i>
+                                <h3>Train Machine Learning Model</h3>
+                            </div>
+                            <div class="form-row-2col">
+                                <div class="form-group">
+                                    <label for="ml-target-select">Select Target Column</label>
+                                    <select id="ml-target-select" class="select-control">
+                                        <option value="Price">Price (Target)</option>
+                                        <option value="Department">Department</option>
+                                        <option value="GPA">GPA</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="ml-model-select">Select Model Algorithm</label>
+                                    <select id="ml-model-select" class="select-control">
+                                        <option value="Random Forest">Random Forest (Recommended)</option>
+                                        <option value="Linear Regression">Linear Regression</option>
+                                        <option value="Logistic Regression">Logistic Regression</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <button class="btn btn-primary btn-block margin-top-sm" onclick="trainMLModel()">
+                                <i class="fa-solid fa-play"></i> Train Model & Evaluate
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Charts Grid -->
+                    <div class="grid-layout-2col margin-top">
+                        <div class="card glass-card">
+                            <div class="card-title">
+                                <i class="fa-solid fa-chart-column"></i>
+                                <h3>Feature Distributions</h3>
+                            </div>
+                            <div class="chart-container">
+                                <canvas id="featureDistChart"></canvas>
+                            </div>
+                        </div>
+                        <div class="card glass-card">
+                            <div class="card-title">
+                                <i class="fa-solid fa-border-all"></i>
+                                <h3>Feature Correlation Matrix</h3>
+                            </div>
+                            <div class="chart-container">
+                                <canvas id="correlationChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Model Evaluation Results -->
+                    <div class="card glass-card margin-top" id="ml-eval-card">
+                        <div class="card-title">
+                            <i class="fa-solid fa-award"></i>
+                            <h3>Model Performance Metrics</h3>
+                        </div>
+                        <div class="eval-metrics-grid">
+                            <div class="metric-badge-box">
+                                <span>Accuracy / R² Score</span>
+                                <h3 id="metric-r2">89.4%</h3>
+                            </div>
+                            <div class="metric-badge-box">
+                                <span>RMSE (Root Mean Square Error)</span>
+                                <h3 id="metric-rmse">14.21</h3>
+                            </div>
+                            <div class="metric-badge-box">
+                                <span>MAE (Mean Absolute Error)</span>
+                                <h3 id="metric-mae">10.85</h3>
+                            </div>
+                            <div class="metric-badge-box">
+                                <span>Training Time</span>
+                                <h3 id="metric-time">0.14s</h3>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 5. PREDICTION TAB -->
+                <section class="tab-page" id="tab-prediction">
+                    <div class="grid-layout-2col">
+                        <!-- Prediction Input Form -->
+                        <div class="card glass-card">
+                            <div class="card-title">
+                                <i class="fa-solid fa-sliders"></i>
+                                <h3>Enter Feature Values for Inference</h3>
+                            </div>
+                            <div id="prediction-inputs-container" class="prediction-inputs">
+                                <!-- Dynamic form inputs -->
+                                <div class="form-group">
+                                    <label>Area (sq ft)</label>
+                                    <input type="number" class="input-control pred-input" data-feature="Area" value="2500">
+                                </div>
+                                <div class="form-group">
+                                    <label>Bedrooms</label>
+                                    <input type="number" class="input-control pred-input" data-feature="Bedrooms" value="3">
+                                </div>
+                                <div class="form-group">
+                                    <label>Bathrooms</label>
+                                    <input type="number" class="input-control pred-input" data-feature="Bathrooms" value="2">
+                                </div>
+                                <div class="form-group">
+                                    <label>Age of Property (years)</label>
+                                    <input type="number" class="input-control pred-input" data-feature="Age" value="10">
+                                </div>
+                                <div class="form-group">
+                                    <label>Distance to City (km)</label>
+                                    <input type="number" class="input-control pred-input" data-feature="Distance_City" value="5">
+                                </div>
+                            </div>
+                            <button class="btn btn-emerald btn-block margin-top" onclick="runPrediction()">
+                                <i class="fa-solid fa-calculator"></i> Run Prediction
+                            </button>
+                        </div>
+
+                        <!-- Prediction Output Card -->
+                        <div class="card glass-card flex-center">
+                            <div class="prediction-result-card text-center" id="prediction-result-box">
+                                <div class="pred-icon"><i class="fa-solid fa-square-poll-vertical"></i></div>
+                                <span>Predicted Target Value</span>
+                                <h2 class="pred-value" id="pred-output-value">$174.50K</h2>
+                                <p class="pred-subtitle" id="pred-output-target">Target: Property Price (Random Forest Model)</p>
+                                <span class="badge badge-emerald margin-top-sm"><i class="fa-solid fa-shield-halved"></i> Confidence Range: High</span>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 6. HISTORY TAB -->
+                <section class="tab-page" id="tab-history">
+                    <div class="card glass-card">
+                        <div class="card-title space-between">
+                            <h3><i class="fa-solid fa-clock-rotate-left"></i> Operation Audit History</h3>
+                            <button class="btn btn-secondary btn-sm" onclick="fetchHistory()"><i class="fa-solid fa-rotate-right"></i> Refresh</button>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="history-table" id="history-table">
+                                <thead>
+                                    <tr>
+                                        <th>Date & Time</th>
+                                        <th>File</th>
+                                        <th>Action</th>
+                                        <th>Target</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <!-- Dynamic history items -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 7. ABOUT TAB -->
+                <section class="tab-page" id="tab-about">
+                    <div class="card glass-card">
+                        <div class="about-header">
+                            <div class="about-icon"><i class="fa-solid fa-graduation-cap"></i></div>
+                            <div>
+                                <h2>Smart Excel AI Automation Assistant</h2>
+                                <p>B.Tech Computer Science / Artificial Intelligence Student Capstone Project</p>
+                            </div>
+                        </div>
+
+                        <div class="about-content">
+                            <h3><i class="fa-solid fa-lightbulb text-amber"></i> Problem Statement</h3>
+                            <p>Manually editing, validating, and analyzing large Excel workbooks is time-consuming and prone to costly human errors. Users often spend hours navigating through rows and columns to update specific values or build custom machine learning models.</p>
+
+                            <h3><i class="fa-solid fa-diagram-project text-indigo"></i> Architecture & Modular Design</h3>
+                            <div class="modules-detail-list">
+                                <div class="detail-item">
+                                    <h4>Module 1: AI Excel Navigator & Updater</h4>
+                                    <p>Employs natural language intent classification (UPDATE, FIND, CLEAN, ANALYZE, PREDICT), TF-IDF vectorization, cosine similarity, and fuzzy string matching to resolve target columns and rows automatically. Generates diff previews and applies non-destructive edits.</p>
+                                </div>
+                                <div class="detail-item">
+                                    <h4>Module 2: Intelligent Data Cleaner</h4>
+                                    <p>Identifies missing values, duplicate rows, whitespace irregularities, mixed capitalization, and numerical multivariate outliers using Scikit-Learn's Isolation Forest algorithm.</p>
+                                </div>
+                                <div class="detail-item">
+                                    <h4>Module 3: ML Analyzer & Predictor</h4>
+                                    <p>Performs automated feature profiling, correlation analysis, and trains machine learning pipelines (Linear Regression, Logistic Regression, Random Forest) with $R^2$, $RMSE$, $MAE$, and $Accuracy$ metrics.</p>
+                                </div>
+                            </div>
+
+                            <h3><i class="fa-solid fa-stack-overflow text-emerald"></i> Technology Stack</h3>
+                            <div class="tech-tags">
+                                <span class="tech-tag">Python 3.13</span>
+                                <span class="tech-tag">FastAPI</span>
+                                <span class="tech-tag">Pandas</span>
+                                <span class="tech-tag">Scikit-Learn</span>
+                                <span class="tech-tag">NLTK</span>
+                                <span class="tech-tag">OpenPyXL</span>
+                                <span class="tech-tag">Isolation Forest</span>
+                                <span class="tech-tag">HTML5 / Vanilla CSS3 / JS</span>
+                                <span class="tech-tag">Chart.js & SheetJS</span>
+                                <span class="tech-tag">GitHub Pages</span>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+            </div>
+        </main>
+    </div>
+
+    <!-- Preview Diff Modal -->
+    <div class="modal-overlay hidden" id="diff-modal">
+        <div class="modal-content glass-card">
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-code-compare"></i> Row Cell Modification Diff</h3>
+                <button class="modal-close" onclick="closeDiffModal()">&times;</button>
+            </div>
+            <div class="modal-body" id="modal-diff-body">
+                <!-- Modal diff contents -->
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeDiffModal()">Close</button>
+                <button class="btn btn-success" onclick="closeDiffModal(); confirmUpdate();">Confirm Update</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="script.js"></script>
+</body>
+</html>
