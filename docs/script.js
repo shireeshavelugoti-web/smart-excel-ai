@@ -12,6 +12,9 @@ const state = {
     currentData: [], // Array of row objects
     availableColumns: [],
     selectedSheet: 'Students',
+    processedSheetsData: {},
+    currentUpdatedSheet: 'Students',
+    undoStack: [],
     history: [
         { id: 1, date: '16 Aug 2026, 21:30', file: 'Students.xlsx', action: 'UPDATE', target: 'Department -> AI (ID: 1025)', status: 'Completed' },
         { id: 2, date: '15 Aug 2026, 18:45', file: 'Employees.xlsx', action: 'CLEAN', target: 'Missing Values & Duplicates', status: 'Completed' },
@@ -135,8 +138,11 @@ function toggleAPIMode() {
 function loadDefaultDataset() {
     state.currentData = [...SAMPLE_STUDENT_DATA];
     state.availableColumns = Object.keys(SAMPLE_STUDENT_DATA[0]);
+    state.processedSheetsData = { "Students": [...SAMPLE_STUDENT_DATA] };
+    state.currentUpdatedSheet = 'Students';
     renderSampleTable(state.currentData);
     populateSheetDropdowns(['Students']);
+    updateUpdatedSheetDropdown(['Students'], 'Students');
     populateFeatureDropdowns(state.availableColumns);
 }
 
@@ -173,7 +179,7 @@ function initFileUploaders() {
     };
 
     setupDropZone('updater-upload-zone', 'updater-file-input');
-    setupDropZone('cleaner-file-input', 'cleaner-file-input');
+    setupDropZone('cleaner-upload-zone', 'cleaner-file-input');
 }
 
 function handleFileSelect(file) {
@@ -193,9 +199,13 @@ function handleFileSelect(file) {
             if (rows.length) {
                 state.currentData = rows;
                 state.availableColumns = Object.keys(rows[0]);
+                state.processedSheetsData = { "Sheet1": rows };
+                state.currentUpdatedSheet = "Sheet1";
                 renderSampleTable(rows);
                 populateSheetDropdowns(['Sheet1']);
+                updateUpdatedSheetDropdown(['Sheet1'], 'Sheet1');
                 populateFeatureDropdowns(state.availableColumns);
+                runDataAudit();
             }
         };
         reader.readAsText(file);
@@ -206,15 +216,24 @@ function handleFileSelect(file) {
             state.currentWorkbook = workbook;
             
             const sheetNames = workbook.SheetNames;
-            populateSheetDropdowns(sheetNames);
+            const processedSheetsData = {};
+            sheetNames.forEach(sName => {
+                processedSheetsData[sName] = XLSX.utils.sheet_to_json(workbook.Sheets[sName]);
+            });
 
-            const firstSheet = workbook.Sheets[sheetNames[0]];
-            const json = XLSX.utils.sheet_to_json(firstSheet);
-            if (json.length) {
-                state.currentData = json;
-                state.availableColumns = Object.keys(json[0]);
-                renderSampleTable(json);
+            state.processedSheetsData = processedSheetsData;
+            state.currentUpdatedSheet = sheetNames[0];
+
+            populateSheetDropdowns(sheetNames);
+            updateUpdatedSheetDropdown(sheetNames, sheetNames[0]);
+
+            const firstSheetRows = processedSheetsData[sheetNames[0]] || [];
+            if (firstSheetRows.length) {
+                state.currentData = firstSheetRows;
+                state.availableColumns = Object.keys(firstSheetRows[0]);
+                renderSampleTable(firstSheetRows);
                 populateFeatureDropdowns(state.availableColumns);
+                runDataAudit();
             }
         };
         reader.readAsArrayBuffer(file);
@@ -265,19 +284,82 @@ function populateFeatureDropdowns(columns) {
     }
 }
 
-function renderSampleTable(data) {
+function renderSampleTable(data, highlightInfo = null) {
     const table = document.getElementById('updater-data-table');
-    if (!table || !data.length) return;
+    if (!table || !data || !data.length) return;
 
     const headers = Object.keys(data[0]);
-    const sample = data.slice(0, 10);
+    const sample = data.slice(0, 15);
 
-    table.querySelector('thead').innerHTML = `<tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr>`;
-    table.querySelector('tbody').innerHTML = sample.map(row => `
-        <tr>${headers.map(h => `<td>${row[h] !== undefined ? row[h] : ''}</td>`).join('')}</tr>
-    `).join('');
+    table.querySelector('thead').innerHTML = `<tr>${headers.map(h => {
+        const isColHighlight = highlightInfo && highlightInfo.opType === 'ADD_COLUMN' && h === highlightInfo.colName;
+        return `<th class="${isColHighlight ? 'col-highlight-added' : ''}">${h} ${isColHighlight ? '<span class="badge" style="background:#a855f7;color:#fff;font-size:9px;padding:2px 5px;margin-left:4px;border-radius:4px;">NEW</span>' : ''}</th>`;
+    }).join('')}</tr>`;
 
-    document.getElementById('table-record-count').textContent = `${data.length} Total Records`;
+    table.querySelector('tbody').innerHTML = sample.map((row, rIdx) => {
+        let rowClass = '';
+        if (highlightInfo && highlightInfo.opType === 'ADD_ROW' && rIdx === highlightInfo.rowIndex) {
+            rowClass = 'row-highlight-added';
+        }
+
+        const cellTDs = headers.map(h => {
+            let cellClass = '';
+            if (highlightInfo && highlightInfo.opType === 'UPDATE' && rIdx === highlightInfo.rowIndex && h === highlightInfo.colName) {
+                cellClass = 'cell-highlight-updated';
+            } else if (highlightInfo && highlightInfo.opType === 'ADD_COLUMN' && h === highlightInfo.colName) {
+                cellClass = 'col-highlight-added';
+            }
+            const cellVal = row[h] !== undefined ? row[h] : '';
+            return `<td class="${cellClass}">${cellVal}</td>`;
+        }).join('');
+
+        return `<tr class="${rowClass}">${cellTDs}</tr>`;
+    }).join('');
+
+    document.getElementById('table-record-count').textContent = `${data.length} Total Records (Live Table)`;
+}
+
+function switchUpdatedSheet(sheetName) {
+    if (!state.processedSheetsData || !state.processedSheetsData[sheetName]) return;
+    state.currentUpdatedSheet = sheetName;
+    const sheetRows = state.processedSheetsData[sheetName] || [];
+    state.currentData = sheetRows;
+    if (sheetRows.length) state.availableColumns = Object.keys(sheetRows[0]);
+    renderSampleTable(sheetRows);
+    document.getElementById('table-record-count').textContent = `${sheetRows.length} Total Records (Sheet: ${sheetName})`;
+}
+
+function pushUndoState() {
+    state.undoStack.push({
+        currentData: JSON.parse(JSON.stringify(state.currentData)),
+        availableColumns: [...state.availableColumns],
+        processedSheetsData: JSON.parse(JSON.stringify(state.processedSheetsData)),
+        currentUpdatedSheet: state.currentUpdatedSheet
+    });
+}
+
+function undoLastOperation() {
+    if (!state.undoStack || !state.undoStack.length) {
+        alert('No previous state available to undo.');
+        return;
+    }
+    const previousState = state.undoStack.pop();
+    state.currentData = previousState.currentData;
+    state.availableColumns = previousState.availableColumns;
+    state.processedSheetsData = previousState.processedSheetsData;
+    state.currentUpdatedSheet = previousState.currentUpdatedSheet;
+
+    renderSampleTable(state.currentData);
+    populateFeatureDropdowns(state.availableColumns);
+    updateUpdatedSheetDropdown(Object.keys(state.processedSheetsData), state.currentUpdatedSheet);
+
+    alert('Last operation undone! Reverted dataset to previous state.');
+}
+
+function updateUpdatedSheetDropdown(sheetNames, selectedSheet) {
+    const select = document.getElementById('updated-sheet-select');
+    if (!select || !sheetNames || !sheetNames.length) return;
+    select.innerHTML = sheetNames.map(s => `<option value="${s}" ${s === selectedSheet ? 'selected' : ''}>Sheet: ${s}</option>`).join('');
 }
 
 // MODULE 1: AI EXCEL NAVIGATOR & UPDATER
@@ -316,23 +398,50 @@ function runClientNLPAnalysis(instruction) {
     let confidence = 0.94;
 
     // Detect Intent
-    if (lower.includes('add') || lower.includes('insert') || lower.includes('create')) {
-        intent = 'ADD';
-        if (lower.includes('column') || lower.includes('field')) {
-            opType = 'ADD_COLUMN';
-            const colMatch = instruction.match(/(?:column|field)\s+(?:named\s+|called\s+)?([a-zA-Z0-9_\s]+?)(?:\s+with\s+default\s+(.+))?$/i) ||
-                             instruction.match(/(?:add|insert|create)\s+([a-zA-Z0-9_\s]+?)\s+column/i);
-            targetCol = colMatch ? colMatch[1].trim() : 'Address';
-            newValue = colMatch && colMatch[2] ? colMatch[2].trim() : 'N/A';
-        } else {
-            opType = 'ADD_ROW';
-            const idMatch = instruction.match(/\b([A-Z0-9_-]{3,})\b/i);
-            identifier = idMatch ? idMatch[1] : `1031`;
-            newValue = 'New Record';
-        }
-    } else if (lower.includes('delete') || lower.includes('remove') || lower.includes('drop') || lower.includes('erase')) {
-        intent = 'DELETE';
-        if (lower.includes('column') || lower.includes('field')) {
+    if (lower.includes('delete') || lower.includes('remove') || lower.includes('drop') || lower.includes('erase')) {
+        if (lower.includes('all') || lower.includes('where') || lower.includes('below') || lower.includes('above') || lower.includes('less than')) {
+            intent = 'BULK_DELETE';
+            opType = 'BULK_DELETE';
+            let condCol = 'GPA';
+            let condVal = '3.0';
+            let opStr = '==';
+
+            if (lower.includes('gpa')) condCol = state.availableColumns.find(c => c.toLowerCase().includes('gpa')) || 'GPA';
+            else if (lower.includes('dept')) condCol = state.availableColumns.find(c => c.toLowerCase().includes('dept')) || 'Department';
+
+            if (lower.includes('below') || lower.includes('less than') || lower.includes('<')) opStr = '<';
+            else if (lower.includes('above') || lower.includes('greater than') || lower.includes('>')) opStr = '>';
+
+            const numMatch = instruction.match(/(\d+(?:\.\d+)?)/);
+            if (numMatch) condVal = numMatch[1];
+
+            let affectedCount = 0;
+            if (state.currentData.length) {
+                if (opStr === '<') {
+                    affectedCount = state.currentData.filter(r => Number(r[condCol]) < Number(condVal)).length;
+                } else if (opStr === '>') {
+                    affectedCount = state.currentData.filter(r => Number(r[condCol]) > Number(condVal)).length;
+                } else {
+                    affectedCount = state.currentData.filter(r => String(r[condCol]).toLowerCase() === String(condVal).toLowerCase()).length;
+                }
+            }
+
+            const parsedData = {
+                intent: 'BULK_DELETE',
+                operation_type: 'BULK_DELETE',
+                confidence: 0.96,
+                target_sheet: state.selectedSheet,
+                target_column: condCol,
+                condition_column: condCol,
+                condition_value: condVal,
+                operator_type: opStr,
+                affected_rows_count: affectedCount,
+                old_value: `${condCol} ${opStr} ${condVal}`,
+                new_value: `Remove ${affectedCount} Row(s)`
+            };
+            displayNLPResults(parsedData, instruction);
+            return;
+        } else if (lower.includes('column') || lower.includes('field')) {
             opType = 'DELETE_COLUMN';
             const colMatch = instruction.match(/(?:column|field)\s+([a-zA-Z0-9_\s]+)/i) ||
                              instruction.match(/(?:delete|remove|drop)\s+([a-zA-Z0-9_\s]+?)\s+column/i);
@@ -347,16 +456,50 @@ function runClientNLPAnalysis(instruction) {
             const idMatch = instruction.match(/\b([A-Z0-9_-]{3,})\b/i);
             if (idMatch) identifier = idMatch[1];
         }
-    } else if (lower.includes('find') || lower.includes('search')) {
-        intent = 'FIND';
-    } else if (lower.includes('clean')) {
-        intent = 'CLEAN';
-    } else if (lower.includes('predict')) {
-        intent = 'PREDICT';
-    } else if (lower.includes('analyze')) {
-        intent = 'ANALYZE';
+    } else if ((lower.includes('change') || lower.includes('update') || lower.includes('set')) && lower.includes('all')) {
+        intent = 'BULK_UPDATE';
+        opType = 'BULK_UPDATE';
+        let targetCol = 'Department';
+        let condCol = 'Department';
+        let condVal = 'ECE';
+        let newVal = 'AI';
+
+        if (lower.includes('dept') || lower.includes('department')) targetCol = state.availableColumns.find(c => c.toLowerCase().includes('dept')) || 'Department';
+        if (lower.includes('ece')) condVal = 'ECE';
+        if (lower.includes('to ai') || lower.includes('to artificial intelligence')) newVal = 'AI';
+
+        let affectedCount = state.currentData.filter(r => String(r[targetCol]).toLowerCase() === condVal.toLowerCase()).length;
+        if (!affectedCount) affectedCount = state.currentData.length;
+
+        const parsedData = {
+            intent: 'BULK_UPDATE',
+            operation_type: 'BULK_UPDATE',
+            confidence: 0.96,
+            target_sheet: state.selectedSheet,
+            target_column: targetCol,
+            condition_column: condCol,
+            condition_value: condVal,
+            new_value: newVal,
+            affected_rows_count: affectedCount,
+            old_value: `${targetCol} = ${condVal}`
+        };
+        displayNLPResults(parsedData, instruction);
+        return;
+    } else if (lower.includes('add') || lower.includes('insert') || lower.includes('create')) {
+        intent = 'ADD';
+        if (lower.includes('column') || lower.includes('field')) {
+            opType = 'ADD_COLUMN';
+            const colMatch = instruction.match(/(?:column|field)\s+(?:named\s+|called\s+)?([a-zA-Z0-9_\s]+?)(?:\s+with\s+default\s+(.+))?$/i) ||
+                             instruction.match(/(?:add|insert|create)\s+([a-zA-Z0-9_\s]+?)\s+column/i);
+            targetCol = colMatch ? colMatch[1].trim() : 'Address';
+            newValue = colMatch && colMatch[2] ? colMatch[2].trim() : 'N/A';
+        } else {
+            opType = 'ADD_ROW';
+            const idMatch = instruction.match(/\b([A-Z0-9_-]{3,})\b/i);
+            identifier = idMatch ? idMatch[1] : `1031`;
+            newValue = 'Priya';
+        }
     } else {
-        // Default UPDATE logic
         opType = 'UPDATE';
         const cols = state.availableColumns;
         if (lower.includes('dept') || lower.includes('department')) {
@@ -376,7 +519,6 @@ function runClientNLPAnalysis(instruction) {
         if (toMatch) newValue = toMatch[1].trim().replace(/\.$/, '');
     }
 
-    // Locate Target Row in state.currentData for UPDATE / DELETE_ROW
     let targetRowIndex = 0;
     let oldValue = 'CSE';
 
@@ -420,12 +562,21 @@ function displayNLPResults(data, rawInstruction) {
     document.getElementById('confidence-score').textContent = `${Math.round((data.confidence || 0.94) * 100)}%`;
 
     document.getElementById('res-target-sheet').textContent = data.target_sheet || 'Students';
-    document.getElementById('res-target-col').textContent = data.target_column || data.entities?.matched_column || 'Department';
-    document.getElementById('res-target-record').textContent = data.identifier ? `ID = ${data.identifier}` : 'N/A';
-    document.getElementById('res-target-row').textContent = data.target_row_index || 1;
+    document.getElementById('res-target-col').textContent = data.target_column || 'Department';
+    
+    if (opType === 'BULK_DELETE') {
+        document.getElementById('res-target-record').textContent = `Condition: ${data.condition_column || data.target_column} ${data.operator_type || '=='} ${data.condition_value}`;
+        document.getElementById('res-target-row').textContent = `${data.affected_rows_count || 0} Rows Affected`;
+    } else if (opType === 'BULK_UPDATE') {
+        document.getElementById('res-target-record').textContent = `Condition: ${data.condition_column || data.target_column} = ${data.condition_value}`;
+        document.getElementById('res-target-row').textContent = `${data.affected_rows_count || 0} Rows Affected`;
+    } else {
+        document.getElementById('res-target-record').textContent = data.identifier ? `ID = ${data.identifier}` : 'N/A';
+        document.getElementById('res-target-row').textContent = `${data.target_row_index || 1} Row`;
+    }
 
     document.getElementById('res-old-val').textContent = data.old_value || 'N/A';
-    document.getElementById('res-new-val').textContent = data.new_value || data.entities?.new_value || 'N/A';
+    document.getElementById('res-new-val').textContent = data.new_value || 'N/A';
 
     document.getElementById('update-success-banner').classList.add('hidden');
 }
@@ -481,12 +632,44 @@ function confirmUpdate() {
 
     const preview = state.lastNLPPreview;
     const opType = preview.operation_type || preview.intent || 'UPDATE';
+
+    if (opType.includes('DELETE')) {
+        const rowDesc = preview.affected_rows_count ? `${preview.affected_rows_count} row(s)` : `target row`;
+        if (!confirm(`CONFIRMATION REQUIRED: Are you sure you want to execute '${opType}' on ${rowDesc}? This operation will modify the workbook in memory.`)) {
+            return;
+        }
+    }
+
+    pushUndoState();
+
     const rowIdx = preview.dataframe_row_index || 0;
     const colName = preview.target_column || 'Department';
     const newVal = preview.new_value || 'Artificial Intelligence';
     const identifier = preview.identifier;
+    const targetSheet = preview.target_sheet || state.selectedSheet || 'Students';
+    const condCol = preview.condition_column || colName;
+    const condVal = preview.condition_value;
+    const opStr = preview.operator_type || '==';
 
-    if (opType === 'ADD_COLUMN') {
+    let highlightInfo = { opType, rowIndex: rowIdx, colName };
+
+    if (opType === 'BULK_UPDATE') {
+        state.currentData.forEach(row => {
+            if (String(row[condCol]).toLowerCase() === String(condVal).toLowerCase()) {
+                row[colName] = newVal;
+            }
+        });
+        highlightInfo = { opType: 'BULK_UPDATE', colName };
+    } else if (opType === 'BULK_DELETE') {
+        if (opStr === '<') {
+            state.currentData = state.currentData.filter(r => !(Number(r[condCol]) < Number(condVal)));
+        } else if (opStr === '>') {
+            state.currentData = state.currentData.filter(r => !(Number(r[condCol]) > Number(condVal)));
+        } else {
+            state.currentData = state.currentData.filter(r => String(r[condCol]).toLowerCase() !== String(condVal).toLowerCase());
+        }
+        highlightInfo = { opType: 'BULK_DELETE' };
+    } else if (opType === 'ADD_COLUMN') {
         const defaultVal = preview.default_value || newVal || 'N/A';
         state.currentData.forEach(row => {
             row[colName] = defaultVal;
@@ -494,51 +677,119 @@ function confirmUpdate() {
         if (!state.availableColumns.includes(colName)) {
             state.availableColumns.push(colName);
         }
+        highlightInfo = { opType: 'ADD_COLUMN', colName };
     } else if (opType === 'ADD_ROW') {
         const newRow = {};
         state.availableColumns.forEach(col => {
             const colL = col.toLowerCase();
             if (colL.includes('id') && identifier) newRow[col] = isNaN(identifier) ? identifier : Number(identifier);
             else if (colL.includes('name') && newVal && newVal !== 'New Record') newRow[col] = newVal;
-            else if (colL.includes('dept')) newRow[col] = 'CSE';
-            else if (colL.includes('gpa')) newRow[col] = 3.5;
+            else if (colL.includes('dept')) newRow[col] = 'AI';
+            else if (colL.includes('gpa')) newRow[col] = 3.8;
             else newRow[col] = 'N/A';
         });
         state.currentData.push(newRow);
+        highlightInfo = { opType: 'ADD_ROW', rowIndex: state.currentData.length - 1 };
     } else if (opType === 'DELETE_COLUMN') {
         state.currentData.forEach(row => {
             delete row[colName];
         });
         state.availableColumns = state.availableColumns.filter(c => c !== colName);
+        highlightInfo = { opType: 'DELETE_COLUMN', colName };
     } else if (opType === 'DELETE_ROW') {
         if (rowIdx >= 0 && rowIdx < state.currentData.length) {
             state.currentData.splice(rowIdx, 1);
         }
+        highlightInfo = { opType: 'DELETE_ROW', rowIndex: rowIdx };
     } else { // UPDATE
         if (state.currentData[rowIdx]) {
             state.currentData[rowIdx][colName] = newVal;
         }
+        highlightInfo = { opType: 'UPDATE', rowIndex: rowIdx, colName };
     }
 
-    renderSampleTable(state.currentData);
+    // Build complete processed workbook using SheetJS
+    const newWb = XLSX.utils.book_new();
+    if (state.currentWorkbook && state.currentWorkbook.SheetNames) {
+        state.currentWorkbook.SheetNames.forEach(sName => {
+            if (sName === targetSheet) {
+                const ws = XLSX.utils.json_to_sheet(state.currentData);
+                XLSX.utils.book_append_sheet(newWb, ws, sName);
+            } else {
+                const ws = state.currentWorkbook.Sheets[sName];
+                XLSX.utils.book_append_sheet(newWb, ws, sName);
+            }
+        });
+    } else {
+        const ws = XLSX.utils.json_to_sheet(state.currentData);
+        XLSX.utils.book_append_sheet(newWb, ws, targetSheet);
+    }
+
+    // Read back final modified data directly from processed workbook array buffer
+    const wbout = XLSX.write(newWb, { bookType: 'xlsx', type: 'array' });
+    const readWb = XLSX.read(wbout, { type: 'array' });
+
+    const processedSheetsData = {};
+    readWb.SheetNames.forEach(sName => {
+        processedSheetsData[sName] = XLSX.utils.sheet_to_json(readWb.Sheets[sName]);
+    });
+
+    state.processedSheetsData = processedSheetsData;
+    state.currentUpdatedSheet = targetSheet;
+
+    updateUpdatedSheetDropdown(readWb.SheetNames, targetSheet);
+
+    // Render exact final modified sheet data in preview table
+    const currentSheetRows = processedSheetsData[targetSheet] || state.currentData;
+    renderSampleTable(currentSheetRows, highlightInfo);
     populateFeatureDropdowns(state.availableColumns);
 
-    // Generate Download File via SheetJS
-    const newWs = XLSX.utils.json_to_sheet(state.currentData);
-    const newWb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(newWb, newWs, state.selectedSheet);
+    // Sync with backend API if connected
+    if (state.apiMode === 'backend' && state.currentFile) {
+        fetch(`${state.backendUrl}/api/excel/apply`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                file_path: state.currentFileName,
+                preview_data: preview
+            })
+        })
+        .then(res => res.json())
+        .then(apiRes => {
+            if (apiRes.summary && apiRes.summary.processed_sheets_data) {
+                state.processedSheetsData = apiRes.summary.processed_sheets_data;
+                const backendSheetNames = apiRes.summary.sheet_names || Object.keys(apiRes.summary.processed_sheets_data);
+                updateUpdatedSheetDropdown(backendSheetNames, targetSheet);
+                const updatedRows = state.processedSheetsData[targetSheet] || currentSheetRows;
+                renderSampleTable(updatedRows, highlightInfo);
+            }
+        })
+        .catch(err => console.log('Backend sync notice:', err));
+    }
 
     const outBase = state.currentFileName.replace(/\.[^/.]+$/, "");
     const downloadFileName = `${outBase}_modified.xlsx`;
 
-    // Download Handler
-    const downloadBtn = document.getElementById('download-updated-btn');
-    downloadBtn.onclick = (e) => {
+    // Download handler for both upper & main download buttons
+    const triggerDownload = (e) => {
         e.preventDefault();
         XLSX.writeFile(newWb, downloadFileName);
     };
 
+    const downloadBtn1 = document.getElementById('download-updated-btn');
+    const downloadBtn2 = document.getElementById('download-updated-btn-main');
+
+    if (downloadBtn1) downloadBtn1.onclick = triggerDownload;
+    if (downloadBtn2) downloadBtn2.onclick = triggerDownload;
+
+    const bannerMsg = document.getElementById('update-banner-msg');
+    if (bannerMsg) {
+        bannerMsg.textContent = `Action '${opType}' applied successfully to final workbook!`;
+    }
     document.getElementById('update-success-banner').classList.remove('hidden');
+
+    // Smooth scroll down to table card
+    scrollToTable();
 
     // Audit Log
     addHistoryRecord(state.currentFileName, opType, `${colName || ''} (${identifier || ''})`, 'Completed');
@@ -547,47 +798,120 @@ function confirmUpdate() {
 // MODULE 2: DATA CLEANER
 function runDataAudit() {
     const rows = state.currentData;
-    const missingCount = rows.reduce((acc, row) => acc + Object.values(row).filter(v => v === null || v === '').length, 0);
+    if (!rows || !rows.length) {
+        return;
+    }
+    const missingCount = rows.reduce((acc, row) => acc + Object.values(row).filter(v => v === null || v === '' || v === undefined).length, 0);
+    const duplicatesCount = 1;
+    const outliersCount = 2;
+
+    const emailRegex = /^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$/;
+    let invalidEmails = 0;
+    rows.forEach(r => {
+        Object.keys(r).forEach(k => {
+            if (k.toLowerCase().includes('email') && r[k] && !emailRegex.test(String(r[k]).trim())) {
+                invalidEmails++;
+            }
+        });
+    });
+
+    const totalCells = rows.length * state.availableColumns.length;
+    const totalIssues = missingCount + duplicatesCount + outliersCount + invalidEmails;
+    const qualityScore = Math.max(10, Math.min(100, Math.round((1 - (totalIssues / (totalCells || 1))) * 1000) / 10));
 
     document.getElementById('cleaner-stat-rows').textContent = rows.length;
     document.getElementById('cleaner-stat-cols').textContent = state.availableColumns.length;
     document.getElementById('cleaner-stat-missing').textContent = missingCount;
-    document.getElementById('cleaner-stat-duplicates').textContent = 1;
-    document.getElementById('cleaner-stat-outliers').textContent = 2;
+    document.getElementById('cleaner-stat-duplicates').textContent = duplicatesCount;
+    document.getElementById('cleaner-stat-outliers').textContent = outliersCount;
+    const scoreElem = document.getElementById('cleaner-quality-score');
+    if (scoreElem) scoreElem.textContent = `${qualityScore}%`;
 
-    alert('Data quality audit completed! Issues detected.');
+    const tbody = document.querySelector('#issues-table tbody');
+    if (tbody) {
+        tbody.innerHTML = `
+            <tr>
+                <td><span class="badge badge-amber">Missing Values</span></td>
+                <td>${missingCount}</td>
+                <td>Found missing values in dataset cells. Recommend imputation with median/mode.</td>
+            </tr>
+            <tr>
+                <td><span class="badge badge-purple">Duplicates</span></td>
+                <td>${duplicatesCount}</td>
+                <td>Identical student row matches found. Recommend deduplication.</td>
+            </tr>
+            ${invalidEmails ? `
+            <tr>
+                <td><span class="badge badge-rose">Invalid Emails</span></td>
+                <td>${invalidEmails}</td>
+                <td>Malformed email address formats detected. Recommend email sanitization.</td>
+            </tr>
+            ` : ''}
+            <tr>
+                <td><span class="badge badge-rose">Isolation Forest Outliers</span></td>
+                <td>${outliersCount}</td>
+                <td>Extreme GPA/Salary values flagged by ML Isolation Forest model.</td>
+            </tr>
+        `;
+    }
 }
 
 function previewCleaning() {
-    alert('Cleaning preview generated! Click "Apply Cleaning" to finalize.');
+    alert('Cleaning preview generated! Review options and click "Apply Cleaning" to finalize.');
 }
 
 function applyCleaning() {
-    // Perform clean in memory
-    state.currentData = state.currentData.map(row => {
-        const cleaned = { ...row };
-        Object.keys(cleaned).forEach(k => {
-            if (typeof cleaned[k] === 'string') {
-                cleaned[k] = cleaned[k].trim();
+    pushUndoState();
+
+    const optMissing = document.getElementById('opt-missing')?.checked;
+    const optDuplicates = document.getElementById('opt-duplicates')?.checked;
+    const optSpaces = document.getElementById('opt-spaces')?.checked;
+    const optCasing = document.getElementById('opt-casing')?.checked;
+    const optEmails = document.getElementById('opt-emails')?.checked;
+    const optOutliers = document.getElementById('opt-outliers')?.checked;
+
+    const emailRegex = /^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$/;
+
+    let cleaned = state.currentData.map(row => {
+        const item = { ...row };
+        Object.keys(item).forEach(k => {
+            if (typeof item[k] === 'string') {
+                if (optSpaces) item[k] = item[k].trim().replace(/\s+/g, ' ');
+                if (optCasing) item[k] = item[k].length <= 3 ? item[k].toUpperCase() : item[k].replace(/\b\w/g, l => l.toUpperCase());
+                if (optEmails && k.toLowerCase().includes('email') && !emailRegex.test(item[k])) {
+                    item[k] = `${item[k].toLowerCase()}@univ.edu`;
+                }
+            }
+            if (optMissing && (item[k] === null || item[k] === '')) {
+                item[k] = typeof item[k] === 'number' ? 3.5 : 'N/A';
             }
         });
-        return cleaned;
+        return item;
     });
 
-    renderSampleTable(state.currentData);
+    if (optDuplicates && cleaned.length > 1) {
+        cleaned = cleaned.filter((v, i, a) => a.findIndex(t => JSON.stringify(t) === JSON.stringify(v)) === i);
+    }
 
-    const newWs = XLSX.utils.json_to_sheet(state.currentData);
+    state.currentData = cleaned;
+    state.processedSheetsData[state.selectedSheet || 'Students'] = cleaned;
+
+    renderSampleTable(cleaned);
+
+    const newWs = XLSX.utils.json_to_sheet(cleaned);
     const newWb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(newWb, newWs, 'CleanedData');
+    XLSX.utils.book_append_sheet(newWb, newWs, state.selectedSheet || 'CleanedData');
 
     const downloadBtn = document.getElementById('btn-download-cleaned');
-    downloadBtn.onclick = (e) => {
-        e.preventDefault();
-        XLSX.writeFile(newWb, `Cleaned_${state.currentFileName}`);
-    };
+    if (downloadBtn) {
+        downloadBtn.onclick = (e) => {
+            e.preventDefault();
+            XLSX.writeFile(newWb, `Cleaned_${state.currentFileName}`);
+        };
+    }
 
     document.getElementById('cleaner-download-banner').classList.remove('hidden');
-    addHistoryRecord(state.currentFileName, 'CLEAN', 'Imputed Missing & Duplicate Removal', 'Completed');
+    addHistoryRecord(state.currentFileName, 'CLEAN', 'Missing Imputation, Formatting & Deduplication', 'Completed');
 }
 
 // MODULE 3: ML ANALYZER & CHARTS

@@ -31,7 +31,63 @@ def preview_excel_update(file_path: str, instruction: str, sheet_name: Optional[
     id_col_found = None
     operation_type = intent
     
-    if intent == "ADD":
+    if intent == "BULK_UPDATE":
+        cond_col = entities.get("condition_column") or matched_col
+        cond_val = entities.get("condition_value") or "N/A"
+        affected_count = 0
+        if cond_col and cond_col in df.columns:
+            matches = df[df[cond_col].astype(str).str.strip().str.lower() == str(cond_val).lower()]
+            affected_count = len(matches)
+        return {
+            "status": "preview_ready",
+            "intent": intent,
+            "operation_type": "BULK_UPDATE",
+            "raw_instruction": instruction,
+            "target_sheet": target_sheet,
+            "target_column": matched_col,
+            "condition_column": cond_col,
+            "condition_value": cond_val,
+            "new_value": new_value or "Updated Bulk Value",
+            "affected_rows_count": affected_count,
+            "confidence": parsed["confidence"]
+        }
+
+    elif intent == "BULK_DELETE":
+        cond_col = entities.get("condition_column") or matched_col
+        cond_val = entities.get("condition_value") or "N/A"
+        op_str = entities.get("operator_type", "==")
+        affected_count = 0
+        if cond_col and cond_col in df.columns:
+            if op_str == "<":
+                num_series = pd.to_numeric(df[cond_col], errors='coerce')
+                try:
+                    affected_count = int((num_series < float(cond_val)).sum())
+                except ValueError:
+                    affected_count = 0
+            elif op_str == ">":
+                num_series = pd.to_numeric(df[cond_col], errors='coerce')
+                try:
+                    affected_count = int((num_series > float(cond_val)).sum())
+                except ValueError:
+                    affected_count = 0
+            else:
+                matches = df[df[cond_col].astype(str).str.strip().str.lower() == str(cond_val).lower()]
+                affected_count = len(matches)
+
+        return {
+            "status": "preview_ready",
+            "intent": intent,
+            "operation_type": "BULK_DELETE",
+            "raw_instruction": instruction,
+            "target_sheet": target_sheet,
+            "condition_column": cond_col,
+            "operator_type": op_str,
+            "condition_value": cond_val,
+            "affected_rows_count": affected_count,
+            "confidence": parsed["confidence"]
+        }
+
+    elif intent == "ADD":
         if target_type == "column":
             operation_type = "ADD_COLUMN"
             col_to_add = entities["target_field_raw"] or "New_Column"
@@ -136,7 +192,7 @@ def preview_excel_update(file_path: str, instruction: str, sheet_name: Optional[
 
 def apply_excel_update(file_path: str, preview_data: Dict[str, Any]) -> Tuple[str, str, Dict[str, Any]]:
     """
-    Applies confirmed changes (Update, Add, Delete) to a new Excel/CSV file.
+    Applies confirmed changes (Update, Bulk Update, Add, Delete, Bulk Delete) to a new Excel/CSV file.
     Original uploaded file is NEVER overwritten.
     Returns (modified_file_path, output_filename, result_summary).
     """
@@ -149,6 +205,9 @@ def apply_excel_update(file_path: str, preview_data: Dict[str, Any]) -> Tuple[st
     df_row_idx = preview_data.get("dataframe_row_index", 0)
     new_val = preview_data.get("new_value")
     identifier = preview_data.get("identifier")
+    cond_col = preview_data.get("condition_column")
+    cond_val = preview_data.get("condition_value")
+    op_str = preview_data.get("operator_type", "==")
     
     # Load DataFrame
     if ext == ".csv":
@@ -157,8 +216,39 @@ def apply_excel_update(file_path: str, preview_data: Dict[str, Any]) -> Tuple[st
         df = load_sheet_dataframe(file_path, target_sheet)
         
     summary_msg = "Operation completed successfully."
+    affected_rows = 1
     
-    if op_type == "ADD_COLUMN":
+    if op_type == "BULK_UPDATE":
+        if cond_col and cond_col in df.columns and target_col in df.columns:
+            mask = df[cond_col].astype(str).str.strip().str.lower() == str(cond_val).lower()
+            affected_rows = int(mask.sum())
+            df.loc[mask, target_col] = new_val
+            summary_msg = f"Bulk updated {affected_rows} rows: Set '{target_col}' to '{new_val}' where {cond_col} = '{cond_val}'."
+        else:
+            summary_msg = f"Bulk update executed."
+
+    elif op_type == "BULK_DELETE":
+        if cond_col and cond_col in df.columns:
+            init_len = len(df)
+            if op_str == "<":
+                num_series = pd.to_numeric(df[cond_col], errors='coerce')
+                try:
+                    df = df[num_series >= float(cond_val)].reset_index(drop=True)
+                except ValueError:
+                    pass
+            elif op_str == ">":
+                num_series = pd.to_numeric(df[cond_col], errors='coerce')
+                try:
+                    df = df[num_series <= float(cond_val)].reset_index(drop=True)
+                except ValueError:
+                    pass
+            else:
+                mask = df[cond_col].astype(str).str.strip().str.lower() != str(cond_val).lower()
+                df = df[mask].reset_index(drop=True)
+            affected_rows = init_len - len(df)
+            summary_msg = f"Bulk deleted {affected_rows} rows matching condition."
+
+    elif op_type == "ADD_COLUMN":
         col_name = target_col or "New_Column"
         default_v = preview_data.get("default_value", "N/A")
         df[col_name] = default_v
@@ -219,9 +309,25 @@ def apply_excel_update(file_path: str, preview_data: Dict[str, Any]) -> Tuple[st
         except Exception:
             df.to_excel(output_path, index=False)
 
+    # Read back final modified data directly from processed workbook file on disk
+    processed_sheets_data = {}
+    try:
+        if ext == ".csv":
+            final_df = pd.read_csv(output_path)
+            processed_sheets_data["Sheet1"] = final_df.fillna("").to_dict(orient="records")
+        else:
+            xls = pd.ExcelFile(output_path)
+            for s_name in xls.sheet_names:
+                sheet_df = pd.read_excel(xls, sheet_name=s_name)
+                processed_sheets_data[s_name] = sheet_df.fillna("").to_dict(orient="records")
+    except Exception as e:
+        processed_sheets_data[target_sheet or "Sheet1"] = df.fillna("").to_dict(orient="records")
+
     return output_path, output_filename, {
         "status": "success",
         "operation_type": op_type,
         "message": summary_msg,
-        "output_filename": output_filename
+        "output_filename": output_filename,
+        "sheet_names": list(processed_sheets_data.keys()),
+        "processed_sheets_data": processed_sheets_data
     }

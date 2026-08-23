@@ -11,6 +11,14 @@ INTENT_TRAINING_DATA = [
     ("modify grade of student 102 to A", "UPDATE"),
     ("set price of product P100 to 250", "UPDATE"),
     ("replace email of john with john@example.com", "UPDATE"),
+    ("change department of all ece students to ai", "BULK_UPDATE"),
+    ("set status to active for all it employees", "BULK_UPDATE"),
+    ("update salary of all me employees to 60000", "BULK_UPDATE"),
+    ("change department for all students in ece to ai", "BULK_UPDATE"),
+    ("delete all rows where gpa is below 3.0", "BULK_DELETE"),
+    ("remove all students with gpa less than 3.0", "BULK_DELETE"),
+    ("delete rows where department is me", "BULK_DELETE"),
+    ("remove all records with salary below 30000", "BULK_DELETE"),
     ("add new student 1031 with name John", "ADD"),
     ("insert row for employee E108", "ADD"),
     ("add column address to dataset", "ADD"),
@@ -57,12 +65,16 @@ class IntentClassifier:
     def predict(self, text: str) -> Tuple[str, float]:
         """
         Returns (intent, confidence_score)
-        Intents: UPDATE, ADD, DELETE, FIND, ANALYZE, CLEAN, PREDICT
+        Intents: UPDATE, BULK_UPDATE, ADD, DELETE, BULK_DELETE, FIND, ANALYZE, CLEAN, PREDICT
         """
         text_clean = text.lower().strip()
         
         # Rule-based overrides for high confidence
-        if any(w in text_clean for w in ["add", "insert", "append", "create column"]):
+        if any(w in text_clean for w in ["all", "where", "below", "above", "less than", "greater than"]) and any(w in text_clean for w in ["delete", "remove", "erase", "drop"]):
+            return "BULK_DELETE", 0.96
+        elif any(w in text_clean for w in ["all ", "all_"]) and any(w in text_clean for w in ["change", "update", "modify", "set", "replace"]):
+            return "BULK_UPDATE", 0.96
+        elif any(w in text_clean for w in ["add", "insert", "append", "create column"]):
             return "ADD", 0.95
         elif any(w in text_clean for w in ["delete", "remove record", "remove row", "remove column", "drop column", "erase"]):
             return "DELETE", 0.95

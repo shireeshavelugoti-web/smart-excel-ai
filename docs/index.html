@@ -166,11 +166,14 @@
                 <!-- 2. EXCEL UPDATER TAB -->
                 <section class="tab-page" id="tab-updater">
                     <div class="grid-layout-2col">
-                        <!-- Left Panel: Upload & Instruction -->
+                        <!-- Left Panel: Upload & Natural Language Command Bar -->
                         <div class="card glass-card">
                             <div class="card-title">
-                                <i class="fa-solid fa-cloud-arrow-up"></i>
-                                <h3>Upload & Natural Language Query</h3>
+                                <i class="fa-solid fa-wand-magic-sparkles" style="color: var(--accent-purple);"></i>
+                                <div>
+                                    <span style="font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--accent-purple); font-weight: 700; display: block;">AI Natural Language Command Bar</span>
+                                    <h3>What would you like to do with your Excel file?</h3>
+                                </div>
                             </div>
                             
                             <!-- File Drag & Drop -->
@@ -195,24 +198,25 @@
                                 </select>
                             </div>
 
-                             <!-- Sample Prompts -->
+                             <!-- Sample Instruction Chips -->
                              <div class="sample-prompts">
-                                 <span>Sample Instructions:</span>
+                                 <span>Quick Instructions:</span>
                                  <button class="btn-chip" onclick="setUpdaterPrompt('Change the department of student 1025 to Artificial Intelligence.')">Update Dept (1025)</button>
-                                 <button class="btn-chip" onclick="setUpdaterPrompt('Add a column named Address with default N/A.')">Add Column (Address)</button>
-                                 <button class="btn-chip" onclick="setUpdaterPrompt('Add new student 1031 with name John.')">Add Student (1031)</button>
-                                 <button class="btn-chip" onclick="setUpdaterPrompt('Delete column Phone.')">Delete Column (Phone)</button>
-                                 <button class="btn-chip" onclick="setUpdaterPrompt('Delete student record 1025.')">Delete Student (1025)</button>
+                                 <button class="btn-chip" onclick="setUpdaterPrompt('Add a new student with ID 1031, name Priya, department AI and GPA 3.8')">Add Student (1031)</button>
+                                 <button class="btn-chip" onclick="setUpdaterPrompt('Delete student record 1025')">Delete Student (1025)</button>
+                                 <button class="btn-chip" onclick="setUpdaterPrompt('Change the department of all ECE students to AI')">Bulk Update Dept</button>
+                                 <button class="btn-chip" onclick="setUpdaterPrompt('Delete all rows where GPA is below 3.0')">Bulk Delete GPA &lt; 3.0</button>
+                                 <button class="btn-chip" onclick="setUpdaterPrompt('Add a column named Address with default N/A')">Add Column</button>
                              </div>
 
                             <!-- Instruction Input -->
                             <div class="form-group">
-                                <label for="nl-instruction-input">Natural Language Instruction</label>
-                                <textarea id="nl-instruction-input" rows="3" class="input-control" placeholder="e.g. Change the department of student 1025 to Artificial Intelligence."></textarea>
+                                <label for="nl-instruction-input">Enter Natural Language Instruction</label>
+                                <textarea id="nl-instruction-input" rows="3" class="input-control" placeholder="e.g. Change the department of student 1025 to Artificial Intelligence, or Delete all rows where GPA is below 3.0."></textarea>
                             </div>
 
                             <button class="btn btn-primary btn-block" id="btn-analyze-instruction" onclick="analyzeInstruction()">
-                                <i class="fa-solid fa-wand-magic-sparkles"></i> Analyze Instruction
+                                <i class="fa-solid fa-wand-magic-sparkles"></i> Analyze & Interpret Command
                             </button>
                         </div>
 
@@ -220,12 +224,12 @@
                         <div class="card glass-card">
                             <div class="card-title">
                                 <i class="fa-solid fa-eye"></i>
-                                <h3>Detected Intent & Modification Preview</h3>
+                                <h3>AI Interpretation & Operation Preview</h3>
                             </div>
 
                             <div class="nlp-results-placeholder" id="nlp-placeholder">
                                 <i class="fa-solid fa-compass-drafting placeholder-icon"></i>
-                                <p>Upload a file and click <strong>Analyze Instruction</strong> to generate a preview of cell modifications.</p>
+                                <p>Type an instruction and click <strong>Analyze & Interpret Command</strong> to generate a preview of cell modifications.</p>
                             </div>
 
                             <div class="nlp-results-content hidden" id="nlp-content">
@@ -244,53 +248,76 @@
                                         <span class="diff-val highlight" id="res-target-col">Department</span>
                                     </div>
                                     <div class="diff-item">
-                                        <span class="diff-label">Target Record:</span>
+                                        <span class="diff-label">Condition / Target:</span>
                                         <span class="diff-val" id="res-target-record">Student ID = 1025</span>
                                     </div>
                                     <div class="diff-item">
-                                        <span class="diff-label">Target Row #:</span>
-                                        <span class="diff-val" id="res-target-row">5</span>
+                                        <span class="diff-label">Affected Rows:</span>
+                                        <span class="diff-val" id="res-target-row" style="color: var(--accent-emerald); font-weight: 700;">1 Row</span>
                                     </div>
                                 </div>
 
                                 <!-- Value Comparison Box -->
                                 <div class="value-comparison-box">
                                     <div class="val-box old-val">
-                                        <span>Current Value</span>
+                                        <span>Before / Condition</span>
                                         <strong id="res-old-val">CSE</strong>
                                     </div>
                                     <div class="val-arrow"><i class="fa-solid fa-arrow-right"></i></div>
                                     <div class="val-box new-val">
-                                        <span>New Value</span>
+                                        <span>After / Value</span>
                                         <strong id="res-new-val">Artificial Intelligence</strong>
                                     </div>
                                 </div>
 
                                 <div class="action-btn-row">
-                                    <button class="btn btn-secondary" onclick="previewDiffModal()"><i class="fa-solid fa-magnifying-glass"></i> Preview Row Diff</button>
-                                    <button class="btn btn-success" id="btn-confirm-update" onclick="confirmUpdate()"><i class="fa-solid fa-check"></i> Confirm Update</button>
+                                    <button class="btn btn-secondary" onclick="previewDiffModal()"><i class="fa-solid fa-magnifying-glass"></i> Inspect Preview</button>
+                                    <button class="btn btn-success" id="btn-confirm-update" onclick="confirmUpdate()"><i class="fa-solid fa-check"></i> Confirm Operation</button>
                                 </div>
 
                                 <div class="update-complete-banner hidden" id="update-success-banner">
                                     <div class="banner-success-text">
                                         <i class="fa-solid fa-circle-check"></i>
-                                        <span>Update completed successfully. Original file preserved.</span>
+                                        <span id="update-banner-msg">Modification applied directly to live table below!</span>
                                     </div>
-                                    <a id="download-updated-btn" class="btn btn-emerald" href="#" download="Students_updated.xlsx">
-                                        <i class="fa-solid fa-download"></i> Download Updated Excel
-                                    </a>
+                                    <div class="banner-btn-group" style="display: flex; gap: 10px; margin-top: 8px; flex-wrap: wrap;">
+                                        <button class="btn btn-warning" id="btn-undo-updater" onclick="undoLastOperation()">
+                                            <i class="fa-solid fa-rotate-left"></i> Undo
+                                        </button>
+                                        <button class="btn btn-secondary" onclick="scrollToTable()">
+                                            <i class="fa-solid fa-eye"></i> View Live Table
+                                        </button>
+                                        <a id="download-updated-btn" class="btn btn-emerald" href="#" download="Students_updated.xlsx">
+                                            <i class="fa-solid fa-download"></i> Download Modified Excel
+                                        </a>
+                                    </div>
                                 </div>
                             </div>
                         </div>
                     </div>
 
-                    <!-- Dataset Preview Table -->
-                    <div class="card glass-card margin-top">
-                        <div class="card-title space-between">
-                            <h3><i class="fa-solid fa-table"></i> Dataset Sample Table</h3>
-                            <span class="record-count-badge" id="table-record-count">10 Records</span>
+                    <!-- Updated Data Preview Section -->
+                    <div class="card glass-card margin-top" id="dataset-table-card">
+                        <div class="card-title space-between" style="flex-wrap: wrap; gap: 12px;">
+                            <div>
+                                <span style="font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--accent-emerald); font-weight: 700; display: block; margin-bottom: 2px;">
+                                    <i class="fa-solid fa-eye"></i> Updated Data Preview
+                                </span>
+                                <h3><i class="fa-solid fa-table"></i> Live Sheet Data</h3>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                                <div style="display: flex; align-items: center; gap: 6px;">
+                                    <label for="updated-sheet-select" style="font-size: 12px; color: var(--text-muted); white-space: nowrap;"><i class="fa-solid fa-layer-group"></i> Worksheet:</label>
+                                    <select id="updated-sheet-select" class="select-control" onchange="switchUpdatedSheet(this.value)" style="padding: 4px 10px; font-size: 13px;">
+                                        <option value="Students">Sheet: Students</option>
+                                    </select>
+                                </div>
+                                <span class="record-count-badge" id="table-record-count">10 Records</span>
+                            </div>
                         </div>
-                        <div class="table-responsive">
+
+                        <!-- Vertically & Horizontally Scrollable Table Container -->
+                        <div class="table-responsive scrollable-table-container">
                             <table class="data-table" id="updater-data-table">
                                 <thead>
                                     <!-- Dynamic headers -->
@@ -299,6 +326,16 @@
                                     <!-- Dynamic rows -->
                                 </tbody>
                             </table>
+                        </div>
+
+                        <!-- Download Section directly below the table -->
+                        <div class="download-section-footer" style="display: flex; justify-content: space-between; align-items: center; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border-color); flex-wrap: wrap; gap: 12px;">
+                            <div class="download-info">
+                                <span style="font-size: 13px; color: var(--text-muted);"><i class="fa-solid fa-circle-check" style="color: var(--accent-emerald);"></i> Table displays actual final modified workbook data.</span>
+                            </div>
+                            <a id="download-updated-btn-main" class="btn btn-emerald" href="#" download="Students_updated.xlsx">
+                                <i class="fa-solid fa-download"></i> Download Updated Excel
+                            </a>
                         </div>
                     </div>
                 </section>
@@ -312,7 +349,7 @@
                                 <i class="fa-solid fa-file-shield"></i>
                                 <h3>Select Dataset</h3>
                             </div>
-                            <div class="upload-zone compact" onclick="document.getElementById('cleaner-file-input').click()">
+                            <div class="upload-zone compact" id="cleaner-upload-zone" onclick="document.getElementById('cleaner-file-input').click()">
                                 <i class="fa-solid fa-upload"></i>
                                 <p>Click or Drag to Upload Dataset</p>
                                 <input type="file" id="cleaner-file-input" accept=".xlsx, .xls, .csv" hidden>
@@ -330,9 +367,15 @@
 
                         <!-- Data Quality Overview Stats -->
                         <div class="card glass-card col-span-2">
-                            <div class="card-title">
-                                <i class="fa-solid fa-heart-pulse"></i>
-                                <h3>Data Quality Overview</h3>
+                            <div class="card-title space-between">
+                                <div>
+                                    <i class="fa-solid fa-heart-pulse" style="color: var(--accent-emerald);"></i>
+                                    <h3>Data Quality Overview</h3>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <span style="font-size: 12px; color: var(--text-muted);">Quality Score:</span>
+                                    <span class="badge" id="cleaner-quality-score" style="background: rgba(16, 185, 129, 0.2); color: #10b981; border: 1px solid #10b981; font-size: 15px; font-weight: 700; padding: 4px 12px; border-radius: 20px;">92.5%</span>
+                                </div>
                             </div>
                             <div class="stats-mini-grid">
                                 <div class="mini-stat">
@@ -364,14 +407,14 @@
                         <div class="card glass-card">
                             <div class="card-title">
                                 <i class="fa-solid fa-list-check"></i>
-                                <h3>Detected Quality Issues</h3>
+                                <h3>Detected Quality Issues & AI Recommendations</h3>
                             </div>
                             <table class="issues-table" id="issues-table">
                                 <thead>
                                     <tr>
                                         <th>Issue Category</th>
                                         <th>Count</th>
-                                        <th>Details</th>
+                                        <th>Details & Recommendations</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -407,7 +450,7 @@
                                 </label>
                                 <label class="checkbox-item">
                                     <input type="checkbox" id="opt-duplicates" checked>
-                                    <span>Deduplicate identical rows</span>
+                                    <span>Deduplicate identical rows & IDs</span>
                                 </label>
                                 <label class="checkbox-item">
                                     <input type="checkbox" id="opt-spaces" checked>
@@ -416,6 +459,10 @@
                                 <label class="checkbox-item">
                                     <input type="checkbox" id="opt-casing" checked>
                                     <span>Standardize capitalization (Title / Upper)</span>
+                                </label>
+                                <label class="checkbox-item">
+                                    <input type="checkbox" id="opt-emails" checked>
+                                    <span>Sanitize & fix invalid email formats</span>
                                 </label>
                                 <label class="checkbox-item">
                                     <input type="checkbox" id="opt-outliers">
@@ -430,9 +477,14 @@
 
                             <div class="cleaned-download-banner hidden" id="cleaner-download-banner">
                                 <p><i class="fa-solid fa-circle-check text-emerald"></i> Dataset cleaned successfully!</p>
-                                <a class="btn btn-emerald" id="btn-download-cleaned" href="#">
-                                    <i class="fa-solid fa-download"></i> Download Cleaned File
-                                </a>
+                                <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-top: 8px;">
+                                    <button class="btn btn-warning" id="btn-undo-cleaner" onclick="undoLastOperation()">
+                                        <i class="fa-solid fa-rotate-left"></i> Undo Cleaning
+                                    </button>
+                                    <a class="btn btn-emerald" id="btn-download-cleaned" href="#">
+                                        <i class="fa-solid fa-download"></i> Download Cleaned File
+                                    </a>
+                                </div>
                             </div>
                         </div>
                     </div>

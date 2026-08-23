@@ -66,6 +66,22 @@ def test_intent_classification_and_entities():
     assert res9["entities"]["target_type"] == "row"
     assert res9["entities"]["identifier"] == "1025"
 
+    # Prompt 10: BULK_UPDATE
+    prompt10 = "Change the department of all ECE students to AI."
+    res10 = parse_natural_instruction(prompt10, cols1)
+    assert res10["intent"] == "BULK_UPDATE"
+    assert res10["entities"]["matched_column"] == "Department"
+    assert res10["entities"]["condition_value"] == "ECE"
+    assert res10["entities"]["new_value"] == "AI"
+
+    # Prompt 11: BULK_DELETE
+    prompt11 = "Delete all rows where GPA is below 3.0"
+    res11 = parse_natural_instruction(prompt11, cols1)
+    assert res11["intent"] == "BULK_DELETE"
+    assert res11["entities"]["condition_column"] == "GPA"
+    assert res11["entities"]["operator_type"] == "<"
+    assert res11["entities"]["condition_value"] == "3.0"
+
 def test_fuzzy_column_matching():
     cols = ["Student_ID", "Student_Department", "Contact_Phone_Number", "Annual_Salary"]
     

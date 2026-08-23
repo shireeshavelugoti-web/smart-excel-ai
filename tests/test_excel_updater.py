@@ -20,6 +20,8 @@ def test_excel_update_preview_and_apply():
     assert os.path.exists(output_path)
     assert output_filename != "Students.xlsx" # Ensure original file was NOT overwritten
     assert summary["status"] == "success"
+    assert "processed_sheets_data" in summary
+    assert "Students" in summary["processed_sheets_data"]
 
 def test_excel_add_and_delete_preview_and_apply():
     # Test ADD Column
@@ -37,5 +39,24 @@ def test_excel_add_and_delete_preview_and_apply():
     assert preview_del_col["operation_type"] == "DELETE_COLUMN"
     assert preview_del_col["target_column"] == "Phone"
     out_path2, out_name2, sum2 = apply_excel_update(SAMPLE_FILE, preview_del_col)
+    assert os.path.exists(out_path2)
+    assert sum2["status"] == "success"
+
+def test_excel_bulk_operations():
+    # Bulk Update
+    preview_bulk_up = preview_excel_update(SAMPLE_FILE, "Change the department of all ECE students to AI", "Students")
+    assert preview_bulk_up["intent"] == "BULK_UPDATE"
+    assert preview_bulk_up["operation_type"] == "BULK_UPDATE"
+    assert preview_bulk_up["condition_value"] == "ECE"
+    out_path1, out_name1, sum1 = apply_excel_update(SAMPLE_FILE, preview_bulk_up)
+    assert os.path.exists(out_path1)
+    assert sum1["status"] == "success"
+
+    # Bulk Delete
+    preview_bulk_del = preview_excel_update(SAMPLE_FILE, "Delete all rows where GPA is below 3.0", "Students")
+    assert preview_bulk_del["intent"] == "BULK_DELETE"
+    assert preview_bulk_del["operation_type"] == "BULK_DELETE"
+    assert preview_bulk_del["operator_type"] == "<"
+    out_path2, out_name2, sum2 = apply_excel_update(SAMPLE_FILE, preview_bulk_del)
     assert os.path.exists(out_path2)
     assert sum2["status"] == "success"

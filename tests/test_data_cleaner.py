@@ -30,3 +30,5 @@ def test_data_cleaner_audit_and_apply(tmp_path):
     assert df_clean["Department"].isnull().sum() == 0
     assert df_clean.duplicated().sum() == 0
     assert len(df_clean) < len(df_dirty)
+    assert "processed_sheets_data" in summary
+    assert "Sheet1" in summary["processed_sheets_data"]

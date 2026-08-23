@@ -23,9 +23,46 @@ def parse_natural_instruction(instruction: str, available_columns: List[str] = N
     matched_column = None
     col_confidence = 0.0
     
-    if intent == "UPDATE":
+    condition_column = None
+    condition_value = None
+    operator_type = "=="
+
+    if intent == "BULK_UPDATE":
+        target_type = "bulk_row"
+        p_bulk_up1 = re.search(r'(?:change|update|set|modify)\s+(?:the\s+)?([a-zA-Z\s_]+?)\s+of\s+all\s+([a-zA-Z0-9_\s]+?)\s+(?:students|employees|users|records|rows)?\s+to\s+(.+)', instruction_clean, re.IGNORECASE)
+        p_bulk_up2 = re.search(r'(?:change|update|set|modify)\s+(?:the\s+)?([a-zA-Z\s_]+?)\s+to\s+(.+?)\s+for\s+all\s+([a-zA-Z0-9_\s]+?)(?:\s+(?:students|employees|users|records|rows))?$', instruction_clean, re.IGNORECASE)
+        
+        if p_bulk_up1:
+            extracted_target_field = p_bulk_up1.group(1).strip()
+            condition_value = p_bulk_up1.group(2).strip()
+            extracted_new_value = p_bulk_up1.group(3).strip().rstrip('.')
+        elif p_bulk_up2:
+            extracted_target_field = p_bulk_up2.group(1).strip()
+            extracted_new_value = p_bulk_up2.group(2).strip()
+            condition_value = p_bulk_up2.group(3).strip().rstrip('.')
+
+    elif intent == "BULK_DELETE":
+        target_type = "bulk_row"
+        p_bulk_del1 = re.search(r'(?:delete|remove|erase|drop)\s+(?:all\s+)?(?:rows|records|students|employees)?\s*(?:where|with|having)\s+([a-zA-Z\s_]+?)\s+(?:is\s+)?(below|less than|under|<|above|greater than|over|>|is|equals|==|=)\s+(.+)', instruction_clean, re.IGNORECASE)
+        p_bulk_del2 = re.search(r'(?:delete|remove|erase|drop)\s+(?:all\s+)?(?:rows|records|students|employees)?\s*where\s+([a-zA-Z\s_]+?)\s*=\s*(.+)', instruction_clean, re.IGNORECASE)
+        
+        if p_bulk_del1:
+            condition_column = p_bulk_del1.group(1).strip()
+            op_str = p_bulk_del1.group(2).lower().strip()
+            condition_value = p_bulk_del1.group(3).strip().rstrip('.')
+            if op_str in ["below", "less than", "under", "<"]:
+                operator_type = "<"
+            elif op_str in ["above", "greater than", "over", ">"]:
+                operator_type = ">"
+            else:
+                operator_type = "=="
+        elif p_bulk_del2:
+            condition_column = p_bulk_del2.group(1).strip()
+            operator_type = "=="
+            condition_value = p_bulk_del2.group(2).strip().rstrip('.')
+
+    elif intent == "UPDATE":
         target_type = "cell"
-        # Regular expressions for update pattern:
         p1 = re.search(r'(?:change|update|set|modify)\s+(?:the\s+)?([a-zA-Z\s_]+?)\s+of\s+(?:student|employee|id|record|user|row)?\s*([a-zA-Z0-9_-]+)\s+to\s+(.+)', instruction_clean, re.IGNORECASE)
         p2 = re.search(r'(?:change|update|set|modify)\s+(?:the\s+)?([a-zA-Z\s_]+?)\s+to\s+(.+?)\s+for\s+(?:student|employee|id|record|user)?\s*([a-zA-Z0-9_-]+)', instruction_clean, re.IGNORECASE)
         p3 = re.search(r'(?:set|update)\s+([a-zA-Z0-9_-]+)\s+([a-zA-Z\s_]+?)\s*=\s*(.+)', instruction_clean, re.IGNORECASE)
@@ -102,6 +139,10 @@ def parse_natural_instruction(instruction: str, available_columns: List[str] = N
             extracted_identifier = p_find.group(1).strip()
 
     # Column Matching if columns provided
+    cond_matched_col = None
+    if available_columns and condition_column:
+        cond_matched_col, _ = match_column_name(condition_column, available_columns)
+
     if available_columns and extracted_target_field:
         matched_column, col_confidence = match_column_name(extracted_target_field, available_columns)
     elif available_columns:
@@ -122,6 +163,9 @@ def parse_natural_instruction(instruction: str, available_columns: List[str] = N
             "target_field_raw": extracted_target_field,
             "matched_column": matched_column or extracted_target_field,
             "identifier": extracted_identifier,
-            "new_value": extracted_new_value
+            "new_value": extracted_new_value,
+            "condition_column": cond_matched_col or condition_column,
+            "condition_value": condition_value,
+            "operator_type": operator_type
         }
     }
