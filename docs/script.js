@@ -6,6 +6,7 @@
 const state = {
     apiMode: 'client', // 'client' or 'backend'
     backendUrl: 'http://localhost:8000',
+    backendFilePath: null,
     currentFile: null,
     currentFileName: 'Students.xlsx',
     currentWorkbook: null,
@@ -185,6 +186,11 @@ function initFileUploaders() {
 function handleFileSelect(file) {
     state.currentFile = file;
     state.currentFileName = file.name;
+    state.backendFilePath = null;
+
+    if (state.apiMode === 'backend') {
+        uploadFileToBackend(file);
+    }
 
     document.getElementById('updater-filename').textContent = file.name;
     document.getElementById('updater-filesize').textContent = `${(file.size / 1024).toFixed(1)} KB`;
@@ -240,6 +246,30 @@ function handleFileSelect(file) {
     }
 }
 
+async function uploadFileToBackend(file) {
+    const formData = new FormData();
+    formData.append('file', file, file.name);
+
+    try {
+        const response = await fetch(`${state.backendUrl}/api/upload`, {
+            method: 'POST',
+            body: formData
+        });
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({}));
+            throw new Error(error.detail || 'Backend upload failed.');
+        }
+        const result = await response.json();
+        state.backendFilePath = result.file_path;
+        if (result.overview?.sheets) {
+            populateSheetDropdowns(result.overview.sheets);
+        }
+    } catch (error) {
+        state.backendFilePath = null;
+        console.warn('Backend upload unavailable; using browser mode for this file.', error);
+    }
+}
+
 function parseCSVText(csvText) {
     const lines = csvText.trim().split('\n');
     if (!lines.length) return [];
@@ -257,10 +287,22 @@ function parseCSVText(csvText) {
 }
 
 function populateSheetDropdowns(sheetNames) {
+    if (sheetNames?.length) state.selectedSheet = sheetNames[0];
     ['updater-sheet-select', 'cleaner-sheet-select'].forEach(id => {
         const select = document.getElementById(id);
         if (select) {
             select.innerHTML = sheetNames.map(s => `<option value="${s}">Sheet: ${s}</option>`).join('');
+            select.onchange = () => {
+                state.selectedSheet = select.value;
+                const selectedRows = state.processedSheetsData[state.selectedSheet];
+                if (selectedRows?.length) {
+                    state.currentData = selectedRows;
+                    state.availableColumns = Object.keys(selectedRows[0]);
+                    renderSampleTable(selectedRows);
+                    populateFeatureDropdowns(state.availableColumns);
+                    runDataAudit();
+                }
+            };
         }
     });
 }
@@ -745,17 +787,22 @@ function confirmUpdate() {
     populateFeatureDropdowns(state.availableColumns);
 
     // Sync with backend API if connected
-    if (state.apiMode === 'backend' && state.currentFile) {
+    if (state.apiMode === 'backend' && state.backendFilePath) {
         fetch(`${state.backendUrl}/api/excel/apply`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                file_path: state.currentFileName,
+                file_path: state.backendFilePath,
                 preview_data: preview
             })
         })
         .then(res => res.json())
         .then(apiRes => {
+            if (apiRes.download_url) {
+                const backendDownloadUrl = `${state.backendUrl}${apiRes.download_url}`;
+                if (downloadBtn1) downloadBtn1.onclick = () => window.open(backendDownloadUrl, '_blank');
+                if (downloadBtn2) downloadBtn2.onclick = () => window.open(backendDownloadUrl, '_blank');
+            }
             if (apiRes.summary && apiRes.summary.processed_sheets_data) {
                 state.processedSheetsData = apiRes.summary.processed_sheets_data;
                 const backendSheetNames = apiRes.summary.sheet_names || Object.keys(apiRes.summary.processed_sheets_data);
@@ -800,6 +847,22 @@ function runDataAudit() {
     const rows = state.currentData;
     if (!rows || !rows.length) {
         return;
+    }
+
+    if (state.apiMode === 'backend' && state.backendFilePath) {
+        fetch(`${state.backendUrl}/api/cleaner/audit`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ file_path: state.backendFilePath, sheet_name: state.selectedSheet })
+        }).then(response => response.ok ? response.json() : Promise.reject())
+            .then(audit => {
+                document.getElementById('cleaner-stat-rows').textContent = audit.total_rows;
+                document.getElementById('cleaner-stat-cols').textContent = audit.total_columns;
+                document.getElementById('cleaner-stat-missing').textContent = audit.missing_values_count;
+                document.getElementById('cleaner-stat-duplicates').textContent = audit.duplicates_count;
+                document.getElementById('cleaner-stat-outliers').textContent = audit.outlier_records?.length || 0;
+                document.getElementById('cleaner-quality-score').textContent = `${audit.quality_score}%`;
+            }).catch(() => console.warn('Backend audit unavailable; showing browser audit.'));
     }
     const missingCount = rows.reduce((acc, row) => acc + Object.values(row).filter(v => v === null || v === '' || v === undefined).length, 0);
     const duplicatesCount = 1;
@@ -912,6 +975,31 @@ function applyCleaning() {
 
     document.getElementById('cleaner-download-banner').classList.remove('hidden');
     addHistoryRecord(state.currentFileName, 'CLEAN', 'Missing Imputation, Formatting & Deduplication', 'Completed');
+
+    if (state.apiMode === 'backend' && state.backendFilePath) {
+        fetch(`${state.backendUrl}/api/cleaner/apply`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                file_path: state.backendFilePath,
+                sheet_name: state.selectedSheet,
+                options: {
+                    fill_missing: optMissing,
+                    remove_duplicates: optDuplicates,
+                    trim_spaces: optSpaces,
+                    standardize_case: optCasing,
+                    fix_invalid_emails: optEmails,
+                    remove_outliers: optOutliers
+                }
+            })
+        }).then(response => response.ok ? response.json() : Promise.reject())
+            .then(result => {
+                if (result.download_url && downloadBtn) {
+                    const url = `${state.backendUrl}${result.download_url}`;
+                    downloadBtn.onclick = event => { event.preventDefault(); window.open(url, '_blank'); };
+                }
+            }).catch(() => console.warn('Backend cleaning unavailable; keeping browser-generated file.'));
+    }
 }
 
 // MODULE 3: ML ANALYZER & CHARTS
@@ -960,6 +1048,25 @@ function trainMLModel() {
     const target = document.getElementById('ml-target-select').value;
     const modelAlgo = document.getElementById('ml-model-select').value;
 
+    if (state.apiMode === 'backend' && state.backendFilePath) {
+        fetch(`${state.backendUrl}/api/ml/train`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ file_path: state.backendFilePath, target_column: target, model_name: modelAlgo, sheet_name: state.selectedSheet })
+        }).then(response => response.ok ? response.json() : response.json().then(error => Promise.reject(error)))
+            .then(result => {
+                state.trainedModel = { target, modelAlgo, modelId: result.model_id };
+                const metrics = result.metrics || {};
+                document.getElementById('metric-r2').textContent = metrics.r2_score != null ? `${(metrics.r2_score * 100).toFixed(1)}%` : (metrics.accuracy || 'N/A');
+                document.getElementById('metric-rmse').textContent = metrics.rmse ?? 'N/A';
+                document.getElementById('metric-mae').textContent = metrics.mae ?? 'N/A';
+                document.getElementById('metric-time').textContent = 'API';
+                alert(`Successfully trained ${result.model_name} on target column "${target}"!`);
+                addHistoryRecord(state.currentFileName, 'TRAIN ML', `${result.model_name} on ${target}`, 'Completed');
+            }).catch(error => alert(error.detail || 'Backend model training failed.'));
+        return;
+    }
+
     document.getElementById('metric-r2').textContent = '91.2%';
     document.getElementById('metric-rmse').textContent = '12.45';
     document.getElementById('metric-mae').textContent = '9.10';
@@ -977,6 +1084,22 @@ function runPrediction() {
     inputs.forEach(input => {
         sum += Number(input.value) || 0;
     });
+
+    if (state.apiMode === 'backend' && state.trainedModel?.modelId) {
+        const inputFeatures = {};
+        inputs.forEach(input => { inputFeatures[input.dataset.feature] = Number(input.value) || 0; });
+        fetch(`${state.backendUrl}/api/ml/predict`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ model_id: state.trainedModel.modelId, input_features: inputFeatures })
+        }).then(response => response.ok ? response.json() : response.json().then(error => Promise.reject(error)))
+            .then(result => {
+                document.getElementById('pred-output-value').textContent = result.prediction;
+                document.getElementById('pred-output-target').textContent = `Model: ${result.model_title}`;
+                addHistoryRecord('Dataset', 'PREDICT', `Predicted ${result.target_column}: ${result.prediction}`, 'Completed');
+            }).catch(error => alert(error.detail || 'Backend prediction failed.'));
+        return;
+    }
 
     const predVal = (sum * 0.08 + 120.5).toFixed(2);
     document.getElementById('pred-output-value').textContent = `$${predVal}K`;
@@ -1002,6 +1125,13 @@ function addHistoryRecord(file, action, target, status) {
 }
 
 function fetchHistory() {
+    if (state.apiMode === 'backend') {
+        fetch(`${state.backendUrl}/api/history`)
+            .then(response => response.ok ? response.json() : Promise.reject())
+            .then(history => { state.history = history; renderHistoryTable(); })
+            .catch(() => renderHistoryTable());
+        return;
+    }
     renderHistoryTable();
 }
 
