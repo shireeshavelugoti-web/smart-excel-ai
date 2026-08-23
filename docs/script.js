@@ -309,53 +309,93 @@ function analyzeInstruction() {
 function runClientNLPAnalysis(instruction) {
     const lower = instruction.toLowerCase();
     let intent = 'UPDATE';
+    let opType = 'UPDATE';
     let targetCol = state.availableColumns[0] || 'Department';
     let identifier = '1025';
     let newValue = 'Artificial Intelligence';
     let confidence = 0.94;
 
-    // Intent Detection
-    if (lower.includes('find') || lower.includes('search')) intent = 'FIND';
-    else if (lower.includes('clean')) intent = 'CLEAN';
-    else if (lower.includes('predict')) intent = 'PREDICT';
-    else if (lower.includes('analyze')) intent = 'ANALYZE';
+    // Detect Intent
+    if (lower.includes('add') || lower.includes('insert') || lower.includes('create')) {
+        intent = 'ADD';
+        if (lower.includes('column') || lower.includes('field')) {
+            opType = 'ADD_COLUMN';
+            const colMatch = instruction.match(/(?:column|field)\s+(?:named\s+|called\s+)?([a-zA-Z0-9_\s]+?)(?:\s+with\s+default\s+(.+))?$/i) ||
+                             instruction.match(/(?:add|insert|create)\s+([a-zA-Z0-9_\s]+?)\s+column/i);
+            targetCol = colMatch ? colMatch[1].trim() : 'Address';
+            newValue = colMatch && colMatch[2] ? colMatch[2].trim() : 'N/A';
+        } else {
+            opType = 'ADD_ROW';
+            const idMatch = instruction.match(/\b([A-Z0-9_-]{3,})\b/i);
+            identifier = idMatch ? idMatch[1] : `1031`;
+            newValue = 'New Record';
+        }
+    } else if (lower.includes('delete') || lower.includes('remove') || lower.includes('drop') || lower.includes('erase')) {
+        intent = 'DELETE';
+        if (lower.includes('column') || lower.includes('field')) {
+            opType = 'DELETE_COLUMN';
+            const colMatch = instruction.match(/(?:column|field)\s+([a-zA-Z0-9_\s]+)/i) ||
+                             instruction.match(/(?:delete|remove|drop)\s+([a-zA-Z0-9_\s]+?)\s+column/i);
+            if (colMatch) {
+                const found = state.availableColumns.find(c => c.toLowerCase().includes(colMatch[1].trim().toLowerCase()));
+                targetCol = found || colMatch[1].trim();
+            } else {
+                targetCol = state.availableColumns.find(c => c.toLowerCase().includes('phone')) || state.availableColumns[0];
+            }
+        } else {
+            opType = 'DELETE_ROW';
+            const idMatch = instruction.match(/\b([A-Z0-9_-]{3,})\b/i);
+            if (idMatch) identifier = idMatch[1];
+        }
+    } else if (lower.includes('find') || lower.includes('search')) {
+        intent = 'FIND';
+    } else if (lower.includes('clean')) {
+        intent = 'CLEAN';
+    } else if (lower.includes('predict')) {
+        intent = 'PREDICT';
+    } else if (lower.includes('analyze')) {
+        intent = 'ANALYZE';
+    } else {
+        // Default UPDATE logic
+        opType = 'UPDATE';
+        const cols = state.availableColumns;
+        if (lower.includes('dept') || lower.includes('department')) {
+            targetCol = cols.find(c => c.toLowerCase().includes('dept')) || 'Department';
+        } else if (lower.includes('salary') || lower.includes('pay')) {
+            targetCol = cols.find(c => c.toLowerCase().includes('salary')) || 'Salary';
+        } else if (lower.includes('phone') || lower.includes('mobile')) {
+            targetCol = cols.find(c => c.toLowerCase().includes('phone')) || 'Phone';
+        } else if (lower.includes('gpa') || lower.includes('score')) {
+            targetCol = cols.find(c => c.toLowerCase().includes('gpa')) || 'GPA';
+        }
 
-    // Fuzzy Column Matcher
-    const cols = state.availableColumns;
-    if (lower.includes('dept') || lower.includes('department')) {
-        targetCol = cols.find(c => c.toLowerCase().includes('dept')) || 'Department';
-    } else if (lower.includes('salary') || lower.includes('pay')) {
-        targetCol = cols.find(c => c.toLowerCase().includes('salary')) || 'Salary';
-    } else if (lower.includes('phone') || lower.includes('mobile')) {
-        targetCol = cols.find(c => c.toLowerCase().includes('phone')) || 'Phone';
-    } else if (lower.includes('gpa') || lower.includes('score')) {
-        targetCol = cols.find(c => c.toLowerCase().includes('gpa')) || 'GPA';
+        const idMatch = instruction.match(/\b([A-Z0-9_-]{3,})\b/i);
+        if (idMatch) identifier = idMatch[1];
+
+        const toMatch = instruction.match(/to\s+(.+)$/i);
+        if (toMatch) newValue = toMatch[1].trim().replace(/\.$/, '');
     }
 
-    // Extract ID & New Value using RegEx
-    const idMatch = instruction.match(/\b([A-Z0-9_-]{3,})\b/i);
-    if (idMatch) identifier = idMatch[1];
-
-    const toMatch = instruction.match(/to\s+(.+)$/i);
-    if (toMatch) newValue = toMatch[1].trim().replace(/\.$/, '');
-
-    // Locate Target Row in state.currentData
+    // Locate Target Row in state.currentData for UPDATE / DELETE_ROW
     let targetRowIndex = 0;
     let oldValue = 'CSE';
 
-    const rowIdx = state.currentData.findIndex(row => {
-        return Object.values(row).some(v => String(v).toLowerCase() === String(identifier).toLowerCase());
-    });
+    if (state.currentData.length) {
+        const rowIdx = state.currentData.findIndex(row => {
+            return Object.values(row).some(v => String(v).toLowerCase() === String(identifier).toLowerCase());
+        });
 
-    if (rowIdx !== -1) {
-        targetRowIndex = rowIdx;
-        oldValue = state.currentData[rowIdx][targetCol] || 'N/A';
-    } else {
-        oldValue = state.currentData[0] ? state.currentData[0][targetCol] : 'CSE';
+        if (rowIdx !== -1) {
+            targetRowIndex = rowIdx;
+            oldValue = state.currentData[rowIdx][targetCol] || 'N/A';
+        } else {
+            oldValue = state.currentData[0][targetCol] || 'CSE';
+        }
     }
 
     const parsedData = {
         intent: intent,
+        operation_type: opType,
         confidence: confidence,
         target_sheet: state.selectedSheet,
         target_column: targetCol,
@@ -375,16 +415,17 @@ function displayNLPResults(data, rawInstruction) {
     document.getElementById('nlp-placeholder').classList.add('hidden');
     document.getElementById('nlp-content').classList.remove('hidden');
 
-    document.getElementById('detected-intent-badge').textContent = data.intent || 'UPDATE';
+    const opType = data.operation_type || data.intent || 'UPDATE';
+    document.getElementById('detected-intent-badge').textContent = opType;
     document.getElementById('confidence-score').textContent = `${Math.round((data.confidence || 0.94) * 100)}%`;
 
     document.getElementById('res-target-sheet').textContent = data.target_sheet || 'Students';
     document.getElementById('res-target-col').textContent = data.target_column || data.entities?.matched_column || 'Department';
-    document.getElementById('res-target-record').textContent = `ID = ${data.identifier || data.entities?.identifier || '1025'}`;
-    document.getElementById('res-target-row').textContent = data.target_row_index || 5;
+    document.getElementById('res-target-record').textContent = data.identifier ? `ID = ${data.identifier}` : 'N/A';
+    document.getElementById('res-target-row').textContent = data.target_row_index || 1;
 
-    document.getElementById('res-old-val').textContent = data.old_value || 'CSE';
-    document.getElementById('res-new-val').textContent = data.new_value || data.entities?.new_value || 'Artificial Intelligence';
+    document.getElementById('res-old-val').textContent = data.old_value || 'N/A';
+    document.getElementById('res-new-val').textContent = data.new_value || data.entities?.new_value || 'N/A';
 
     document.getElementById('update-success-banner').classList.add('hidden');
 }
@@ -394,6 +435,7 @@ function previewDiffModal() {
 
     const data = state.lastNLPPreview;
     const modalBody = document.getElementById('modal-diff-body');
+    const opType = data.operation_type || data.intent || 'UPDATE';
 
     modalBody.innerHTML = `
         <div class="diff-grid">
@@ -402,27 +444,27 @@ function previewDiffModal() {
                 <span class="diff-val">${data.target_sheet}</span>
             </div>
             <div class="diff-item">
-                <span class="diff-label">Target Row Index</span>
-                <span class="diff-val">Row #${data.target_row_index}</span>
+                <span class="diff-label">Operation Type</span>
+                <span class="diff-val highlight">${opType}</span>
             </div>
             <div class="diff-item">
-                <span class="diff-label">Column Header</span>
-                <span class="diff-val highlight">${data.target_column}</span>
+                <span class="diff-label">Target Column</span>
+                <span class="diff-val">${data.target_column || 'N/A'}</span>
             </div>
             <div class="diff-item">
-                <span class="diff-label">Identifier Token</span>
-                <span class="diff-val">${data.identifier}</span>
+                <span class="diff-label">Target Identifier</span>
+                <span class="diff-val">${data.identifier || 'N/A'}</span>
             </div>
         </div>
         <div class="value-comparison-box">
             <div class="val-box old-val">
-                <span>Before Modification</span>
-                <strong>${data.old_value}</strong>
+                <span>Before</span>
+                <strong>${data.old_value || 'N/A'}</strong>
             </div>
             <div class="val-arrow"><i class="fa-solid fa-arrow-right"></i></div>
             <div class="val-box new-val">
-                <span>After Modification</span>
-                <strong>${data.new_value}</strong>
+                <span>After / Value</span>
+                <strong>${data.new_value || 'N/A'}</strong>
             </div>
         </div>
     `;
@@ -438,16 +480,48 @@ function confirmUpdate() {
     if (!state.lastNLPPreview) return;
 
     const preview = state.lastNLPPreview;
+    const opType = preview.operation_type || preview.intent || 'UPDATE';
     const rowIdx = preview.dataframe_row_index || 0;
     const colName = preview.target_column || 'Department';
     const newVal = preview.new_value || 'Artificial Intelligence';
+    const identifier = preview.identifier;
 
-    // Apply update to memory data without overwriting original file
-    if (state.currentData[rowIdx]) {
-        state.currentData[rowIdx][colName] = newVal;
+    if (opType === 'ADD_COLUMN') {
+        const defaultVal = preview.default_value || newVal || 'N/A';
+        state.currentData.forEach(row => {
+            row[colName] = defaultVal;
+        });
+        if (!state.availableColumns.includes(colName)) {
+            state.availableColumns.push(colName);
+        }
+    } else if (opType === 'ADD_ROW') {
+        const newRow = {};
+        state.availableColumns.forEach(col => {
+            const colL = col.toLowerCase();
+            if (colL.includes('id') && identifier) newRow[col] = isNaN(identifier) ? identifier : Number(identifier);
+            else if (colL.includes('name') && newVal && newVal !== 'New Record') newRow[col] = newVal;
+            else if (colL.includes('dept')) newRow[col] = 'CSE';
+            else if (colL.includes('gpa')) newRow[col] = 3.5;
+            else newRow[col] = 'N/A';
+        });
+        state.currentData.push(newRow);
+    } else if (opType === 'DELETE_COLUMN') {
+        state.currentData.forEach(row => {
+            delete row[colName];
+        });
+        state.availableColumns = state.availableColumns.filter(c => c !== colName);
+    } else if (opType === 'DELETE_ROW') {
+        if (rowIdx >= 0 && rowIdx < state.currentData.length) {
+            state.currentData.splice(rowIdx, 1);
+        }
+    } else { // UPDATE
+        if (state.currentData[rowIdx]) {
+            state.currentData[rowIdx][colName] = newVal;
+        }
     }
 
     renderSampleTable(state.currentData);
+    populateFeatureDropdowns(state.availableColumns);
 
     // Generate Download File via SheetJS
     const newWs = XLSX.utils.json_to_sheet(state.currentData);
@@ -467,7 +541,7 @@ function confirmUpdate() {
     document.getElementById('update-success-banner').classList.remove('hidden');
 
     // Audit Log
-    addHistoryRecord(state.currentFileName, 'UPDATE', `${colName} -> ${newVal} (${preview.identifier})`, 'Completed');
+    addHistoryRecord(state.currentFileName, opType, `${colName || ''} (${identifier || ''})`, 'Completed');
 }
 
 // MODULE 2: DATA CLEANER

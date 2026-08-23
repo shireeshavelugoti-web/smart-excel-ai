@@ -83,11 +83,23 @@ def excel_apply(
         
     output_path, output_filename, summary = apply_excel_update(file_path, preview_data)
     
+    op_action = preview_data.get("operation_type", preview_data.get("intent", "UPDATE"))
+    if op_action == "ADD_COLUMN":
+        target_desc = f"Add Column: {preview_data.get('target_column')}"
+    elif op_action == "ADD_ROW":
+        target_desc = f"Add Row: ID {preview_data.get('identifier')}"
+    elif op_action == "DELETE_COLUMN":
+        target_desc = f"Delete Column: {preview_data.get('target_column')}"
+    elif op_action == "DELETE_ROW":
+        target_desc = f"Delete Row: #{preview_data.get('target_row_index', 1)}"
+    else:
+        target_desc = f"{preview_data.get('target_column')} = {preview_data.get('new_value')}"
+
     # Record operation in history
     add_history_entry(
         file_name=os.path.basename(file_path),
-        action="UPDATE",
-        target=f"{preview_data.get('target_column')} = {preview_data.get('new_value')}",
+        action=op_action,
+        target=target_desc,
         status="Completed"
     )
     

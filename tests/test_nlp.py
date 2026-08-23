@@ -38,6 +38,34 @@ def test_intent_classification_and_entities():
     res5 = parse_natural_instruction(prompt5)
     assert res5["intent"] == "PREDICT"
 
+    # Prompt 6: ADD Column
+    prompt6 = "Add a column named Address with default N/A."
+    res6 = parse_natural_instruction(prompt6, cols1)
+    assert res6["intent"] == "ADD"
+    assert res6["entities"]["target_type"] == "column"
+    assert res6["entities"]["target_field_raw"] == "Address"
+
+    # Prompt 7: ADD Row
+    prompt7 = "Add new student 1031 with name John."
+    res7 = parse_natural_instruction(prompt7, cols1)
+    assert res7["intent"] == "ADD"
+    assert res7["entities"]["target_type"] == "row"
+    assert res7["entities"]["identifier"] == "1031"
+
+    # Prompt 8: DELETE Column
+    prompt8 = "Delete column Phone."
+    res8 = parse_natural_instruction(prompt8, cols1)
+    assert res8["intent"] == "DELETE"
+    assert res8["entities"]["target_type"] == "column"
+    assert res8["entities"]["matched_column"] == "Phone"
+
+    # Prompt 9: DELETE Row
+    prompt9 = "Delete student record 1025."
+    res9 = parse_natural_instruction(prompt9, cols1)
+    assert res9["intent"] == "DELETE"
+    assert res9["entities"]["target_type"] == "row"
+    assert res9["entities"]["identifier"] == "1025"
+
 def test_fuzzy_column_matching():
     cols = ["Student_ID", "Student_Department", "Contact_Phone_Number", "Annual_Salary"]
     
